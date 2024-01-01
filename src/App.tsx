@@ -21,7 +21,7 @@ import { css } from "@emotion/react";
 const App: React.FC = () => {
   const [recording, setRecording] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<string>("");
-  const [summary, setSummary] = useState<string>(""); // State for the summary
+  const [summary, setSummary] = useState<string>(""); // State for the summary text
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
