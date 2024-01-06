@@ -90,7 +90,7 @@ const App: React.FC = () => {
 
       try {
         const transcribeResponse = await axios.post(
-          "http://20.212.38.210:8000/transcribe",
+          "https://transcribe003.azurewebsites.net/transcribe",
           formData,
           {
             headers: {
