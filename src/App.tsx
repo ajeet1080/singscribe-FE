@@ -178,12 +178,13 @@ const App: React.FC = () => {
             >
               {previousSpeaker}
             </Badge>
-            <Text
-              as={previousSpeaker === "Patient" ? "" : "span"}
-              display="inline"
-            >
-              {dialogue}
-            </Text>
+            {previousSpeaker === "Patient" ? (
+              <></>
+            ) : (
+              <Text as="span" display="inline">
+                {dialogue}
+              </Text>
+            )}
           </Box>
         );
         dialogue = "";
@@ -198,7 +199,7 @@ const App: React.FC = () => {
 
   return (
     <VStack spacing={4} p={4}>
-      <Box align="center">
+      <Box textAlign="center">
         <img src={shslogo} alt="SingHealth Logo" width={225} height={125} />
         <Text fontSize="4xl" fontWeight="bold" color="#E54809" align="center">
           SingScribe
