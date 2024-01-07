@@ -161,7 +161,7 @@ const App: React.FC = () => {
   const parseTranscript = (transcript: string) => {
     return transcript
       .split("\n")
-      .filter((line) => line.trim() !== "PATIENT:" && line.trim() !== "DOCTOR:")
+      .filter((line) => line.trim() !== "")
       .map((line, index) => {
         const isPatient = line.startsWith("Patient");
         const isDoc = line.startsWith("Doctor");
