@@ -6,17 +6,22 @@ import {
   Text,
   Textarea,
   VStack,
+  HStack,
   Spinner,
   Tabs,
   TabList,
   TabPanels,
   Tab,
   TabPanel,
+  useColorModeValue,
+  Badge,
 } from "@chakra-ui/react";
 import axios from "axios";
 import shslogo from "./assets/singhealth-logo.png";
 import shsdividerlogo from "./assets/shs-divider.png";
 import { css } from "@emotion/react";
+import { JSX } from "react/jsx-runtime";
+useColorModeValue;
 
 const App: React.FC = () => {
   const [recording, setRecording] = useState<boolean>(false);
@@ -29,6 +34,9 @@ const App: React.FC = () => {
   const toast = useToast();
   const [apiResponseReceived, setApiResponseReceived] =
     useState<boolean>(false);
+  const [isLoadingTranscript, setIsLoadingTranscript] =
+    useState<boolean>(false);
+  const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(false);
 
   const toggleRecording = async () => {
     if (recording) {
@@ -77,6 +85,7 @@ const App: React.FC = () => {
         tempAudio.current = audioBlob;
         audioChunksRef.current = [];
         setRecording(false);
+        setIsLoading(true);
         await transcribeAudio();
       };
     }
@@ -85,6 +94,8 @@ const App: React.FC = () => {
   const transcribeAudio = async () => {
     if (tempAudio.current) {
       setIsLoading(true);
+      setIsLoadingTranscript(true);
+      setIsLoadingSummary(true);
       const formData = new FormData();
       formData.append("audio", tempAudio.current);
 
@@ -100,21 +111,30 @@ const App: React.FC = () => {
         );
 
         const transcript = transcribeResponse.data.transcript;
-        const [summarizeResponse, formatResponse] = await Promise.all([
-          axios.post(
-            "https://sgs-genai-omr-api.azurewebsites.net/summarize_transript",
-            { transcript },
-            { headers: { "Content-Type": "application/json" } }
-          ),
-          axios.post(
+        // setIsLoading(true);
+        axios
+          .post(
             "https://sgs-genai-omr-api.azurewebsites.net/format_transcript",
             { transcript },
             { headers: { "Content-Type": "application/json" } }
-          ),
-        ]);
+          )
+          .then((formatResponse) => {
+            setTranscript(formatResponse.data.content); // Update as per actual response structure
+            setIsLoadingTranscript(false);
+            //  setIsLoading(true);
+          });
 
-        setTranscript(formatResponse.data.content); // Update as per actual response structure
-        setSummary(summarizeResponse.data.content); // Update as per actual response structure
+        axios
+          .post(
+            "https://sgs-genai-omr-api.azurewebsites.net/summarize_transript",
+            { transcript },
+            { headers: { "Content-Type": "application/json" } }
+          )
+          .then((summarizeResponse) => {
+            setSummary(summarizeResponse.data.content); // Update as per actual response structure
+            setIsLoadingSummary(false);
+            // setIsLoading(true);
+          });
       } catch (error) {
         toast({
           title: "Error transcribing audio",
@@ -125,7 +145,7 @@ const App: React.FC = () => {
           isClosable: true,
         });
       } finally {
-        setIsLoading(false);
+        // setIsLoading(true);
         setApiResponseReceived(true);
       }
     }
@@ -136,10 +156,49 @@ const App: React.FC = () => {
       color: #e54809; /* Change to your preferred shade of orange */
     }
   `;
+  const bgColorDoctor = useColorModeValue("blue.100", "blue.700");
+  const bgColorPatient = useColorModeValue("green.100", "green.700");
+  const parseTranscript = (transcript: string) => {
+    let previousSpeaker = "";
+    let dialogue = "";
+    const transcriptComponents: JSX.Element[] = [];
+
+    transcript.split("\n").forEach((line, index) => {
+      const isPatient = line.startsWith("Patient:");
+      const isDoc = line.startsWith("Doctor:");
+      const speaker = isDoc ? "Doctor" : "Patient";
+
+      if (speaker !== previousSpeaker && dialogue) {
+        transcriptComponents.push(
+          <Box key={index} p={3} borderRadius="md" w="full" boxShadow="md">
+            <Badge
+              colorScheme={previousSpeaker === "Doctor" ? "orange" : "red"}
+              fontSize="0.em"
+              mr={9}
+            >
+              {previousSpeaker}
+            </Badge>
+            <Text
+              as={previousSpeaker === "Patient" ? "" : "span"}
+              display="inline"
+            >
+              {dialogue}
+            </Text>
+          </Box>
+        );
+        dialogue = "";
+      }
+
+      dialogue += " " + line.substring(speaker.length + 1);
+      previousSpeaker = speaker;
+    });
+
+    return transcriptComponents;
+  };
 
   return (
     <VStack spacing={4} p={4}>
-      <Box textAlign="center">
+      <Box align="center">
         <img src={shslogo} alt="SingHealth Logo" width={225} height={125} />
         <Text fontSize="4xl" fontWeight="bold" color="#E54809" align="center">
           SingScribe
@@ -160,35 +219,43 @@ const App: React.FC = () => {
       >
         {recording ? "Stop Recording" : "Start Recording"}
       </Button>
-      {isLoading ? (
-        <Spinner size="xl" color="#E54809" />
-      ) : (
-        apiResponseReceived && (
-          <Tabs css={customTabStyles}>
-            <TabList>
-              <Tab>Transcript</Tab>
-              <Tab>Summary</Tab>
-            </TabList>
-            <TabPanels>
-              <TabPanel>
-                <Textarea
-                  width={1000}
-                  height={400}
-                  value={transcript}
-                  readOnly
-                />
-              </TabPanel>
-              <TabPanel>
-                <Textarea
-                  width={1000}
-                  height={400}
-                  value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
-                />
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
-        )
+      {isLoading && (
+        <HStack spacing={4} width="100%">
+          <Box
+            flex="1"
+            width="100%"
+            height={500}
+            p={3}
+            overflow="auto"
+            borderRadius="md"
+          >
+            <Text fontSize="2xl" fontWeight="bold">
+              Transcript
+            </Text>
+            {isLoadingTranscript ? (
+              <Spinner size="xl" color="#E54809" />
+            ) : (
+              parseTranscript(transcript)
+            )}
+          </Box>
+          <Box flex="1" width="100%" height={500} p={3} borderRadius="md">
+            <Text fontSize="2xl" fontWeight="bold">
+              Summary
+            </Text>
+            {isLoadingSummary ? (
+              <Spinner size="xl" color="#E54809" />
+            ) : (
+              <Textarea
+                width="100%"
+                height={450}
+                p={3}
+                borderRadius="md"
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+              />
+            )}
+          </Box>
+        </HStack>
       )}
     </VStack>
   );
