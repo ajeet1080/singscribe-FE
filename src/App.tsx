@@ -159,42 +159,40 @@ const App: React.FC = () => {
   const bgColorDoctor = useColorModeValue("blue.100", "blue.700");
   const bgColorPatient = useColorModeValue("green.100", "green.700");
   const parseTranscript = (transcript: string) => {
-    let previousSpeaker = "";
-    let dialogue = "";
-    const transcriptComponents: JSX.Element[] = [];
-
-    transcript.split("\n").forEach((line, index) => {
-      const isPatient = line.startsWith("Patient:");
-      const isDoc = line.startsWith("Doctor:");
-      const speaker = isDoc ? "Doctor" : "Patient";
-
-      if (speaker !== previousSpeaker && dialogue) {
-        transcriptComponents.push(
-          <Box key={index} p={3} borderRadius="md" w="full" boxShadow="md">
+    return transcript
+      .split("\n")
+      .filter((line) => line.trim() !== "PATIENT:" && line.trim() !== "DOCTOR:")
+      .map((line, index) => {
+        const isPatient = line.startsWith("Patient");
+        const isDoc = line.startsWith("Doctor");
+        //const bgColor = isPatient ? bgColorPatient : bgColorDoctor;
+        const speaker = isDoc ? "Doctor" : "Patient";
+        return (
+          <Box
+            key={index}
+            // bg={bgColor}
+            p={3}
+            borderRadius="md"
+            w="full"
+            boxShadow="md"
+          >
             <Badge
-              colorScheme={previousSpeaker === "Doctor" ? "orange" : "red"}
+              colorScheme={isPatient ? "red" : "orange"}
               fontSize="0.em"
               mr={9}
             >
-              {previousSpeaker}
+              {speaker}
             </Badge>
-            {previousSpeaker === "Patient" ? (
-              <></>
+            {isPatient ? (
+              <Text display="inline">{line.substring(speaker.length + 1)}</Text>
             ) : (
               <Text as="span" display="inline">
-                {dialogue}
+                {line.substring(speaker.length + 1)}
               </Text>
             )}
           </Box>
         );
-        dialogue = "";
-      }
-
-      dialogue += " " + line.substring(speaker.length + 1);
-      previousSpeaker = speaker;
-    });
-
-    return transcriptComponents;
+      });
   };
 
   return (
