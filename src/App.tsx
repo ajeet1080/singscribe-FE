@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import {
   Button,
   useToast,
@@ -14,13 +14,15 @@ import {
   Tab,
   TabPanel,
   useColorModeValue,
-  Badge,
 } from "@chakra-ui/react";
 import axios from "axios";
 import shslogo from "./assets/singhealth-logo.png";
 import shsdividerlogo from "./assets/shs-divider.png";
-import { css } from "@emotion/react";
-import { JSX } from "react/jsx-runtime";
+import {
+  ConversationTranscriber,
+  SpeechConfig,
+  AudioConfig,
+} from "microsoft-cognitiveservices-speech-sdk";
 useColorModeValue;
 
 const App: React.FC = () => {
@@ -28,15 +30,18 @@ const App: React.FC = () => {
   const [transcript, setTranscript] = useState<string>("");
   const [summary, setSummary] = useState<string>(""); // State for the summary text
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const tempAudio = useRef<Blob | null>(null);
   const toast = useToast();
   const [apiResponseReceived, setApiResponseReceived] =
     useState<boolean>(false);
   const [isLoadingTranscript, setIsLoadingTranscript] =
     useState<boolean>(false);
   const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(false);
+  const [formattedTranscript, setFormattedTranscript] = useState("");
+  const [transcription, setTranscription] = useState<
+    { speakerId: string; text: string }[]
+  >([]);
+  const [conversationTranscriber, setConversationTranscriber] =
+    useState<ConversationTranscriber | null>(null);
 
   const toggleRecording = async () => {
     if (recording) {
@@ -48,12 +53,28 @@ const App: React.FC = () => {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
+      const speechConfig = SpeechConfig.fromSubscription(
+        "e5404bd89ea14c388c2c17234f95e36a",
+        "southeastasia"
+      );
+      const audioConfig = AudioConfig.fromDefaultMicrophoneInput();
+      const transcriber = new ConversationTranscriber(
+        speechConfig,
+        audioConfig
+      );
+
+      transcriber.transcribed = (
+        s: any,
+        e: { result: { text: string; speakerId: string } }
+      ) => {
+        setTranscription((prevTranscription) => [
+          ...prevTranscription,
+          { speakerId: e.result.speakerId, text: e.result.text },
+        ]);
       };
-      mediaRecorderRef.current.start();
+
+      await transcriber.startTranscribingAsync();
+      setConversationTranscriber(transcriber);
       setRecording(true);
 
       // Display toast message for starting recording
@@ -76,123 +97,47 @@ const App: React.FC = () => {
   };
 
   const stopRecording = async () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/wav",
-        });
-        tempAudio.current = audioBlob;
-        audioChunksRef.current = [];
-        setRecording(false);
-        setIsLoading(true);
-        await transcribeAudio();
-      };
+    if (conversationTranscriber) {
+      await conversationTranscriber.stopTranscribingAsync();
+      setConversationTranscriber(null);
     }
+    setRecording(false);
+    setIsLoading(true);
+    setIsLoadingSummary(true);
+    setIsLoadingTranscript(true);
+    await transcribeAudio();
   };
 
   const transcribeAudio = async () => {
-    if (tempAudio.current) {
-      setIsLoading(true);
-      setIsLoadingTranscript(true);
-      setIsLoadingSummary(true);
-      const formData = new FormData();
-      formData.append("audio", tempAudio.current);
-
-      try {
-        const transcribeResponse = await axios.post(
-          "https://transcribe003.azurewebsites.net/transcribe",
-          formData,
-          {
-            headers: {
-              "Content-Type": "multipart/form-data",
-            },
-          }
-        );
-
-        const transcript = transcribeResponse.data.transcript;
-        // setIsLoading(true);
-        axios
-          .post(
-            "https://sgs-genai-omr-api.azurewebsites.net/format_transcript",
-            { transcript },
-            { headers: { "Content-Type": "application/json" } }
-          )
-          .then((formatResponse) => {
-            setTranscript(formatResponse.data.content); // Update as per actual response structure
-            setIsLoadingTranscript(false);
-            //  setIsLoading(true);
-          });
-
-        axios
-          .post(
-            "https://sgs-genai-omr-api.azurewebsites.net/summarize_transript",
-            { transcript },
-            { headers: { "Content-Type": "application/json" } }
-          )
-          .then((summarizeResponse) => {
-            setSummary(summarizeResponse.data.content); // Update as per actual response structure
-            setIsLoadingSummary(false);
-            // setIsLoading(true);
-          });
-      } catch (error) {
-        toast({
-          title: "Error transcribing audio",
-          description:
-            "An error occurred while transcribing the audio." + error,
-          status: "error",
-          duration: 5000,
-          isClosable: true,
-        });
-      } finally {
-        // setIsLoading(true);
-        setApiResponseReceived(true);
-      }
-    }
-  };
-
-  const customTabStyles = css`
-    .chakra-tabs__tab {
-      color: #e54809; /* Change to your preferred shade of orange */
-    }
-  `;
-  const bgColorDoctor = useColorModeValue("blue.100", "blue.700");
-  const bgColorPatient = useColorModeValue("green.100", "green.700");
-  const parseTranscript = (transcript: string) => {
-    return transcript
-      .split("\n")
-      .filter((line) => line.trim() !== "")
-      .map((line, index) => {
-        const isPatient = line.startsWith("Patient");
-        const isDoc = line.startsWith("Doctor");
-        //const bgColor = isPatient ? bgColorPatient : bgColorDoctor;
-        const speaker = isDoc ? "Doctor" : "Patient";
-        return (
-          <Box
-            key={index}
-            // bg={bgColor}
-            p={3}
-            borderRadius="md"
-            w="full"
-            boxShadow="md"
-          >
-            <Badge
-              colorScheme={isPatient ? "red" : "orange"}
-              fontSize="0.em"
-              mr={9}
-            >
-              {speaker}
-            </Badge>
-            {isPatient ? (
-              <Text display="inline">{line.substring(speaker.length + 1)}</Text>
-            ) : (
-              <Text as="span" display="inline">
-                {line.substring(speaker.length + 1)}
-              </Text>
-            )}
-          </Box>
-        );
+    const transcript = transcription
+      .map((t) => `${t.speakerId}: ${t.text}`)
+      .join("\n");
+    // setIsLoading(true);
+    axios
+      .post(
+        "https://sgs-genai-omr-api.azurewebsites.net/format_transcript",
+        { transcript },
+        { headers: { "Content-Type": "application/json" } }
+      )
+      .then((formatResponse) => {
+        setTranscript(formatResponse.data.content); // Update as per actual response structure
+        setFormattedTranscript(formatResponse.data.content);
+        setIsLoadingTranscript(false);
+        //  setIsLoading(true);
       });
+
+    axios
+      .post(
+        "https://sgs-genai-omr-api.azurewebsites.net/summarize_transript",
+        { transcript },
+        { headers: { "Content-Type": "application/json" } }
+      )
+      .then((summarizeResponse) => {
+        setSummary(summarizeResponse.data.content); // Update as per actual response structure
+        setIsLoadingSummary(false);
+        // setIsLoading(true);
+      });
+    setApiResponseReceived(true);
   };
 
   return (
@@ -218,25 +163,58 @@ const App: React.FC = () => {
       >
         {recording ? "Stop Recording" : "Start Recording"}
       </Button>
-      {isLoading && (
+      {
         <HStack spacing={4} width="100%">
-          <Box
-            flex="1"
-            width="100%"
-            height={500}
-            p={3}
-            overflow="auto"
-            borderRadius="md"
-          >
+          <Tabs flex="1" width="100%" height={500} p={3} borderRadius="md">
             <Text fontSize="2xl" fontWeight="bold">
               Transcript
             </Text>
-            {isLoadingTranscript ? (
-              <Spinner size="xl" color="#E54809" />
-            ) : (
-              parseTranscript(transcript)
-            )}
-          </Box>
+            <TabList>
+              <Tab _selected={{ color: "#E54809", borderColor: "#E54809" }}>
+                Raw Transcript
+              </Tab>
+              <Tab _selected={{ color: "#E54809", borderColor: "#E54809" }}>
+                Formatted Transcript
+              </Tab>
+            </TabList>
+            <TabPanels>
+              <TabPanel width="100%" height={450} p={3} borderRadius="md">
+                {transcription.map((t, index) => (
+                  <p
+                    key={index}
+                    style={{
+                      color: t.speakerId === "Guest-1" ? "blue" : "red",
+                    }}
+                  >
+                    {t.speakerId} : {t.text}
+                  </p>
+                ))}
+              </TabPanel>
+              <TabPanel width="100%" height={450} p={3} borderRadius="md">
+                {isLoadingTranscript ? (
+                  <Spinner
+                    label="Formating transcript, please wait..."
+                    size="xl"
+                    color="#E54809"
+                  />
+                ) : (
+                  formattedTranscript.split("\n").map((line, index) => {
+                    const [speaker, text] = line.split(": ");
+                    return (
+                      <p
+                        key={index}
+                        style={{
+                          color: speaker === "Doctor" ? "blue" : "red",
+                        }}
+                      >
+                        {speaker} : {text}
+                      </p>
+                    );
+                  })
+                )}
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
           <Box flex="1" width="100%" height={500} p={3} borderRadius="md">
             <Text fontSize="2xl" fontWeight="bold">
               Summary
@@ -255,7 +233,7 @@ const App: React.FC = () => {
             )}
           </Box>
         </HStack>
-      )}
+      }
     </VStack>
   );
 };
