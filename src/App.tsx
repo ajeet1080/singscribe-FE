@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Button,
   useToast,
@@ -14,6 +14,16 @@ import {
   Tab,
   TabPanel,
   useColorModeValue,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  RadioGroup,
+  Stack,
+  Radio,
 } from "@chakra-ui/react";
 import axios from "axios";
 import shslogo from "./assets/singhealth-logo.png";
@@ -42,6 +52,10 @@ const App: React.FC = () => {
   >([]);
   const [conversationTranscriber, setConversationTranscriber] =
     useState<ConversationTranscriber | null>(null);
+  const [languageSelected, setLanguageSelected] = useState(false);
+  const [language, setLanguage] = useState("en-SG");
+  const [isOpen, setIsOpen] = useState(true);
+  const onClose = () => setIsOpen(false);
 
   const toggleRecording = async () => {
     if (recording) {
@@ -51,12 +65,24 @@ const App: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (languageSelected) {
+      onClose();
+    }
+  }, [language]);
+
+  const handleLanguageChange = (value: string) => {
+    setLanguage(value);
+    setLanguageSelected(true);
+  };
+
   const startRecording = async () => {
     try {
       const speechConfig = SpeechConfig.fromSubscription(
         "e5404bd89ea14c388c2c17234f95e36a",
         "southeastasia"
       );
+      speechConfig.speechRecognitionLanguage = language;
       const audioConfig = AudioConfig.fromDefaultMicrophoneInput();
       const transcriber = new ConversationTranscriber(
         speechConfig,
@@ -142,6 +168,28 @@ const App: React.FC = () => {
 
   return (
     <VStack spacing={4} p={4}>
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Select a language</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <RadioGroup onChange={handleLanguageChange} value={language}>
+              <Stack direction="column">
+                <Radio value="en-SG">English</Radio>
+                <Radio value="zh-SG">Mandarin</Radio>
+                <Radio value="id-ID">Bahasa</Radio>
+                <Radio value="ta-IN">Tamil</Radio>
+              </Stack>
+            </RadioGroup>
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="blue" mr={3} onClick={onClose}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
       <Box textAlign="center">
         <img src={shslogo} alt="SingHealth Logo" width={225} height={125} />
         <Text fontSize="4xl" fontWeight="bold" color="#E54809" align="center">
