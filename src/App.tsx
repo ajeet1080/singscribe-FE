@@ -167,7 +167,12 @@ const App: React.FC = () => {
   };
 
   return (
-    <VStack spacing={4} p={4}>
+    <VStack
+      spacing={4}
+      p={4}
+      backgroundColor="gray.100"
+      style={{ minHeight: "100vh" }}
+    >
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />
         <ModalContent>
@@ -177,7 +182,7 @@ const App: React.FC = () => {
             <RadioGroup onChange={handleLanguageChange} value={language}>
               <Stack direction="column">
                 <Radio value="en-SG">English</Radio>
-                <Radio value="zh-SG">Mandarin</Radio>
+                <Radio value="zh-CN">Mandarin</Radio>
                 <Radio value="id-ID">Bahasa</Radio>
                 <Radio value="ta-IN">Tamil</Radio>
               </Stack>
@@ -190,7 +195,18 @@ const App: React.FC = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
-      <Box textAlign="center">
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        textAlign="center"
+        borderRadius="lg" // rounded corners
+        boxShadow="lg" // shadow effect
+        p={5} // padding
+        bg="white" // white background
+        w="70%" // limit width
+        margin="auto" // center the card
+      >
         <img src={shslogo} alt="SingHealth Logo" width={225} height={125} />
         <Text fontSize="4xl" fontWeight="bold" color="#E54809" align="center">
           SingScribe
@@ -213,7 +229,15 @@ const App: React.FC = () => {
       </Button>
       {
         <HStack spacing={4} width="100%">
-          <Tabs flex="1" width="100%" height={500} p={3} borderRadius="md">
+          <Tabs
+            flex="1"
+            width="100%"
+            height={500}
+            p={3}
+            borderRadius="md"
+            boxShadow="lg"
+            bg="white"
+          >
             <Text fontSize="2xl" fontWeight="bold">
               Transcript
             </Text>
@@ -263,7 +287,15 @@ const App: React.FC = () => {
               </TabPanel>
             </TabPanels>
           </Tabs>
-          <Box flex="1" width="100%" height={500} p={3} borderRadius="md">
+          <Box
+            flex="1"
+            width="100%"
+            height={500}
+            p={3}
+            borderRadius="md"
+            boxShadow="lg"
+            bg="white"
+          >
             <Text fontSize="2xl" fontWeight="bold">
               Summary
             </Text>
