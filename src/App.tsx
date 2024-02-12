@@ -1,4 +1,10 @@
 import React, { useEffect, useState } from "react";
+import Encrypt from "./encrypt";
+import {
+  TextAnalyticsClient,
+  AzureKeyCredential,
+} from "@azure/ai-text-analytics";
+import CryptoJS from "crypto-js";
 import {
   Button,
   useToast,
@@ -48,6 +54,7 @@ const App: React.FC = () => {
   const [transcription, setTranscription] = useState<
     { speakerId: string; text: string }[]
   >([]);
+  const [encryptedTranscript, setEncryptedTranscript] = useState("");
   const [conversationTranscriber, setConversationTranscriber] =
     useState<ConversationTranscriber | null>(null);
   const [languageSelected, setLanguageSelected] = useState(false);
@@ -55,6 +62,9 @@ const App: React.FC = () => {
   const [isOpen, setIsOpen] = useState(true);
   const onClose = () => setIsOpen(false);
   const [isEditing, setIsEditing] = useState(false); // State for the editing mode
+  const [piiEntities, setPiiEntities] = useState<
+    { original: string; encrypted: string }[]
+  >([]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -147,6 +157,42 @@ const App: React.FC = () => {
       .join("\n");
     // setIsLoading(true);
     setIsLoading(true);
+    const textAnalyticsClient = new TextAnalyticsClient(
+      "https://text-analytics-demo1.cognitiveservices.azure.com/",
+      new AzureKeyCredential("f0c9555dd72f452192efd53cdf422996")
+    );
+
+    const encryptresponse = await textAnalyticsClient.recognizePiiEntities(
+      [transcript],
+      "en"
+    );
+    const res = encryptresponse[0]; // Assuming one document is sent
+    if ("error" in res && res.error !== undefined) {
+      throw new Error(res.error.message);
+    }
+    let encryptedText = transcript;
+    const entities = res.entities
+      .filter(
+        (entity) =>
+          entity.category === "Person" ||
+          entity.category === "SGNationalRegistrationIdentityCardNumber" ||
+          entity.category === "Email" ||
+          entity.category === "PhoneNumber" ||
+          entity.category === "Address"
+      )
+      .map((entity) => {
+        // Encrypt only Person and Email PII entities
+        const encryptedValue = CryptoJS.AES.encrypt(
+          entity.text,
+          "secret key 123"
+        ).toString();
+        // Replace these PII entities with encrypted values
+        encryptedText = encryptedText.replace(
+          new RegExp(entity.text, "g"),
+          encryptedValue
+        );
+      });
+    setEncryptedTranscript(encryptedText);
 
     try {
       const response = await fetch(
@@ -164,7 +210,7 @@ const App: React.FC = () => {
                 content: `You will receive a conversation transcript between a doctor and a patient in either English, Mandarin, Indonesian, or Tamil. Your task is to summarize the transcript in English, ensuring that it is easily comprehensible. Please refrain from adding any information not included in the original transcript.
                   Your summary should incorporate the following sections: Problem, Medical history, Medications, Allergies, Family history, Social history, Physical exam, Assessment, Plan.
                   Please use HTML markup to structure your summary. Highlight with HTML markup as <b style='color: #4d4d4d; font-weight: bold; font-size: 19px;'>Section Heading </b> tag for each section heading. Make sure there are no syntax errors in your generated HTML markup. Highlight crucial medical information like diagnoses and medicine names using the <b style='color: red; font-weight: bold; font-size: 18px;'> tag.
-                  Follow the section headings and their order provided in the Sample Summary below, starting with the Problem. Ensure there is a line break at the end of each section.
+                  Follow the section headings and their order provided in the Sample Summary below, starting with the Problem. Ensure there is a line break at the end of each section. Show only those sections from below sample summary for which data input is available.
                   
                   Sample Summary:
                   <b> Problem </b> <br/>
@@ -188,7 +234,7 @@ const App: React.FC = () => {
               },
               {
                 role: "assistant",
-                content: transcript,
+                content: encryptedText,
               },
             ],
             temperature: 0.2,
@@ -263,11 +309,11 @@ const App: React.FC = () => {
               {
                 role: "system",
                 content:
-                  "You will be provided with a transcript of a conversation between a doctor and a patient in either of English, Mandarin, Indonesian or Tamil language. You need to reformat the transcript in English in a way that it is easy to read and understand. Please ensure to do proper tagging as Doctor, Patient. You can use any format provided in Sample Transcript below. Do not add any additional information to the transcript. \n\nSample Transcript:\nDoctor: Hello, how are you?\nPatient: I am fine, thank you.\nDoctor: What brings you here today?\nPatient: I have a headache.\nDoctor: How long have you had it?\nPatient: For about a week.",
+                  "You will be provided with a transcript of a conversation between a doctor and a patient in either of English, Mandarin, Indonesian or Tamil language. You need to reformat the transcript in English in a way that it is easy to read and understand. Please ensure to do proper tagging as Doctor, Patient. You can use any format provided in Sample Transcript below. Do not add any additional information to the transcript. Please replace encrypted text values with revelant masked values eg [Patient' Name] , [Patient's Email] , etc as applicable.  \n\nSample Transcript:\nDoctor: Hello, how are you?\nPatient: I am fine, thank you.\nDoctor: What brings you here today?\nPatient: I have a headache.\nDoctor: How long have you had it?\nPatient: For about a week.",
               },
               {
                 role: "assistant",
-                content: transcript,
+                content: encryptedText,
               },
             ],
             temperature: 0.2,
@@ -356,13 +402,16 @@ const App: React.FC = () => {
         w="70%" // limit width
         // center the card
       >
-        <img src={shslogo} alt="SingHealth Logo" width={225} height={125} />
-        <Text fontSize="4xl" fontWeight="bold" color="#E54809" align="center">
-          SingScribe
-        </Text>
-        <Text fontSize="xl" fontWeight="normal" color="black" align="center">
-          Voice to Text Transcription and summarization
-        </Text>
+        <HStack justifyContent="space-between" width="90%">
+          <img src={shslogo} alt="SingHealth Logo" width={163} height={80} />
+
+          <Text fontSize="xl" fontWeight="normal" color="black" align="center">
+            Voice to Text Transcription and summarization
+          </Text>
+          <Text fontSize="3xl" fontWeight="bold" color="#E54809" align="center">
+            Sing-Scribe
+          </Text>
+        </HStack>
         <img
           src={shsdividerlogo}
           alt="SingHealth Divider"
