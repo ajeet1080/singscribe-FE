@@ -30,10 +30,12 @@ import {
   RadioGroup,
   Stack,
   Radio,
+  Input,
 } from "@chakra-ui/react";
 
 import shslogo from "./assets/singhealth-logo.png";
 import shsdividerlogo from "./assets/shs-divider.png";
+import shsbackground from "./assets/shs-background.png";
 import {
   ConversationTranscriber,
   SpeechConfig,
@@ -62,9 +64,9 @@ const App: React.FC = () => {
   const [isOpen, setIsOpen] = useState(true);
   const onClose = () => setIsOpen(false);
   const [isEditing, setIsEditing] = useState(false); // State for the editing mode
-  const [piiEntities, setPiiEntities] = useState<
-    { original: string; encrypted: string }[]
-  >([]);
+  const [userId, setUserId] = useState("");
+  const [password, setPassword] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -91,6 +93,21 @@ const App: React.FC = () => {
   const handleLanguageChange = (value: string) => {
     setLanguage(value);
     setLanguageSelected(true);
+  };
+
+  const handleLogin = () => {
+    // Simple authentication check (in a real app, you would check against a server)
+    if (userId.trim() === "user01" && password.trim() === "SingHealth123$") {
+      setIsAuthenticated(true);
+    } else {
+      toast({
+        title: "Authentication failed",
+        description: "Please enter a valid user ID and password.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
   };
 
   const startRecording = async () => {
@@ -368,28 +385,6 @@ const App: React.FC = () => {
       backgroundColor="gray.100"
       style={{ minHeight: "100vh" }}
     >
-      <Modal isOpen={isOpen} onClose={onClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Select a language</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <RadioGroup onChange={handleLanguageChange} value={language}>
-              <Stack direction="column">
-                <Radio value="en-SG">English</Radio>
-                <Radio value="zh-CN">Mandarin</Radio>
-                <Radio value="id-ID">Bahasa</Radio>
-                <Radio value="ta-IN">Tamil</Radio>
-              </Stack>
-            </RadioGroup>
-          </ModalBody>
-          <ModalFooter>
-            <Button colorScheme="blue" mr={3} onClick={onClose}>
-              Close
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
       <Box
         display="flex"
         flexDirection="column"
@@ -419,138 +414,213 @@ const App: React.FC = () => {
           height="10px"
         />
       </Box>
-      <Button
-        colorScheme={recording ? "blue" : "orange"}
-        onClick={toggleRecording}
-      >
-        {recording ? "Stop Recording" : "Start Recording"}
-      </Button>
-      {
-        <HStack spacing={4} width="100%">
-          <Tabs
-            flex="1"
-            width="100%"
-            height={600}
-            p={3}
-            borderRadius="md"
-            boxShadow="lg"
-            bg="white"
-          >
-            <Text fontSize="2xl" fontWeight="bold" color="#E54809">
-              Transcript
-            </Text>
-            <TabList>
-              <Tab _selected={{ color: "#E54809", borderColor: "#E54809" }}>
-                Raw Transcript
-              </Tab>
-              <Tab _selected={{ color: "#E54809", borderColor: "#E54809" }}>
-                Formatted Transcript
-              </Tab>
-            </TabList>
-            <TabPanels>
-              <TabPanel
-                width="100%"
-                height={475}
-                p={3}
-                borderRadius="md"
-                overflow="auto"
-              >
-                {transcription.map((t, index) => (
-                  <p
-                    key={index}
-                    style={{
-                      color: t.speakerId === "Guest-1" ? "blue" : "red",
-                    }}
-                  >
-                    {t.speakerId} : {t.text}
-                  </p>
-                ))}
-              </TabPanel>
-              <TabPanel
-                width="100%"
-                height={475}
-                p={3}
-                borderRadius="md"
-                overflow="auto"
-              >
-                {isLoadingTranscript ? (
-                  <Spinner
-                    label="Formating transcript, please wait..."
-                    size="xl"
-                    color="#E54809"
-                  />
-                ) : (
-                  formattedTranscript
-                    .split("\n")
-                    .filter((line) => line.trim() !== ":")
-                    .map((line, index) => {
-                      const [speaker, text] = line.split(": ");
-                      return (
-                        <p
-                          key={index}
-                          style={{
-                            color: speaker === "Doctor" ? "blue" : "red",
-                          }}
-                        >
-                          {speaker} : {text}
-                        </p>
-                      );
-                    })
-                )}
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
+
+      {!isAuthenticated ? (
+        <Box
+          display="flex"
+          flexDirection="column"
+          alignItems="center"
+          justifyContent="center"
+          textAlign="center"
+          height="100vh"
+          width="100vw"
+          bgImage={`url(${shsbackground})`}
+          bgPosition="center"
+          bgRepeat="no-repeat"
+          bgSize="cover"
+        >
           <Box
-            flex="1"
-            width="100%"
-            height={600}
-            p={3}
+            backgroundColor="rgba(255, 255, 255, 0.6)" // Semi-transparent white background
+            p={8}
             borderRadius="md"
             boxShadow="lg"
-            bg="white"
           >
-            <Text fontSize="2xl" fontWeight="bold" color="#E54809">
-              Summary
+            <Text
+              fontSize="2xl"
+              fontWeight="bold"
+              color="black"
+              align="center"
+              mb={4}
+            >
+              Login to Sing-Scribe
             </Text>
-            {isEditing ? (
-              <Button onClick={handleSave} m={2}>
-                Save
-              </Button>
-            ) : (
-              <Button onClick={handleEdit} m={2}>
-                Edit (with HTML)
-              </Button>
-            )}{" "}
-            <Button onClick={handleCopy} m={2}>
-              Copy
+            <Input
+              placeholder="User ID"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              mb={4}
+            />
+            <Input
+              placeholder="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              mb={6}
+            />
+            <Button colorScheme="orange" onClick={handleLogin} width="full">
+              Login
             </Button>
-            {isLoadingSummary ? (
-              <Spinner size="xl" color="#E54809" />
-            ) : isEditing ? (
-              <Textarea
-                width="100%"
-                height={475}
-                p={3}
-                borderRadius="md"
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                overflow={"auto"}
-              />
-            ) : (
-              <Box
-                width="100%"
-                height={475}
-                p={3}
-                borderRadius="md"
-                overflow={"auto"}
-                dangerouslySetInnerHTML={{
-                  __html: summary,
-                }}
-              />
-            )}
+            <Text fontSize="sm" mt={4}>
+              Note: Send email to oia@singhealth.com.sg for access
+            </Text>
           </Box>
-        </HStack>
-      }
+        </Box>
+      ) : (
+        <>
+          <Modal isOpen={isOpen} onClose={onClose}>
+            <ModalOverlay />
+            <ModalContent>
+              <ModalHeader>Select a language</ModalHeader>
+              <ModalCloseButton />
+              <ModalBody>
+                <RadioGroup onChange={handleLanguageChange} value={language}>
+                  <Stack direction="column">
+                    <Radio value="en-SG">English</Radio>
+                    <Radio value="zh-CN">Mandarin</Radio>
+                    <Radio value="id-ID">Bahasa</Radio>
+                    <Radio value="ta-IN">Tamil</Radio>
+                  </Stack>
+                </RadioGroup>
+              </ModalBody>
+              <ModalFooter>
+                <Button colorScheme="blue" mr={3} onClick={onClose}>
+                  Close
+                </Button>
+              </ModalFooter>
+            </ModalContent>
+          </Modal>
+          <Button
+            colorScheme={recording ? "blue" : "orange"}
+            onClick={toggleRecording}
+          >
+            {recording ? "Stop Recording" : "Start Recording"}
+          </Button>
+          <HStack spacing={4} width="100%">
+            <Tabs
+              flex="1"
+              width="100%"
+              height={600}
+              p={3}
+              borderRadius="md"
+              boxShadow="lg"
+              bg="white"
+            >
+              <Text fontSize="2xl" fontWeight="bold" color="#E54809">
+                Transcript
+              </Text>
+              <TabList>
+                <Tab _selected={{ color: "#E54809", borderColor: "#E54809" }}>
+                  Raw Transcript
+                </Tab>
+                <Tab _selected={{ color: "#E54809", borderColor: "#E54809" }}>
+                  Formatted Transcript
+                </Tab>
+              </TabList>
+              <TabPanels>
+                <TabPanel
+                  width="100%"
+                  height={475}
+                  p={3}
+                  borderRadius="md"
+                  overflow="auto"
+                >
+                  {transcription.map((t, index) => (
+                    <p
+                      key={index}
+                      style={{
+                        color: t.speakerId === "Guest-1" ? "blue" : "red",
+                      }}
+                    >
+                      {t.speakerId} : {t.text}
+                    </p>
+                  ))}
+                </TabPanel>
+                <TabPanel
+                  width="100%"
+                  height={475}
+                  p={3}
+                  borderRadius="md"
+                  overflow="auto"
+                >
+                  {isLoadingTranscript ? (
+                    <Spinner
+                      label="Formating transcript, please wait..."
+                      size="xl"
+                      color="#E54809"
+                    />
+                  ) : (
+                    formattedTranscript
+                      .split("\n")
+                      .filter((line) => line.trim() !== ":")
+                      .map((line, index) => {
+                        const [speaker, text] = line.split(": ");
+                        return (
+                          <p
+                            key={index}
+                            style={{
+                              color: speaker === "Doctor" ? "blue" : "red",
+                            }}
+                          >
+                            {speaker} : {text}
+                          </p>
+                        );
+                      })
+                  )}
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
+            <Box
+              flex="1"
+              width="100%"
+              height={600}
+              p={3}
+              borderRadius="md"
+              boxShadow="lg"
+              bg="white"
+            >
+              <Text fontSize="2xl" fontWeight="bold" color="#E54809">
+                Summary
+              </Text>
+              {isEditing ? (
+                <Button onClick={handleSave} m={2}>
+                  Save
+                </Button>
+              ) : (
+                <Button onClick={handleEdit} m={2}>
+                  Edit (with HTML)
+                </Button>
+              )}{" "}
+              <Button onClick={handleCopy} m={2}>
+                Copy
+              </Button>
+              {isLoadingSummary ? (
+                <Spinner size="xl" color="#E54809" />
+              ) : isEditing ? (
+                <Textarea
+                  width="100%"
+                  height={475}
+                  p={3}
+                  borderRadius="md"
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
+                  overflow={"auto"}
+                />
+              ) : (
+                <Box
+                  width="100%"
+                  height={475}
+                  p={3}
+                  borderRadius="md"
+                  overflow={"auto"}
+                  dangerouslySetInnerHTML={{
+                    __html: summary,
+                  }}
+                />
+              )}
+            </Box>
+          </HStack>
+        </>
+      )}
     </VStack>
   );
 };
