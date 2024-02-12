@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import Encrypt from "./encrypt";
+
 import {
   TextAnalyticsClient,
   AzureKeyCredential,
