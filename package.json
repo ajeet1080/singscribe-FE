@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@azure/ai-text-analytics": "^5.1.0",
     "@azure/storage-blob": "^12.17.0",
     "@chakra-ui/react": "^2.8.1",
     "@emotion/react": "^11.11.1",
@@ -30,7 +29,6 @@
     "react-string-replace": "^1.1.1"
   },
   "devDependencies": {
-    "@types/crypto-js": "^4.2.2",
     "@types/react": "^18.0.27",
     "@types/react-dom": "^18.0.10",
     "@vitejs/plugin-react": "^3.1.0",
