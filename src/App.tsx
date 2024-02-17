@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 
 import {
   TextAnalyticsClient,
@@ -67,6 +67,9 @@ const App: React.FC = () => {
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const rawTranscriptRef = useRef<HTMLDivElement | null>(null);
+  const summaryRef = useRef<HTMLDivElement | null>(null);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -378,6 +381,21 @@ const App: React.FC = () => {
     }
   };
 
+  // Scroll the Raw Transcript box to the bottom when new transcription is added
+  useEffect(() => {
+    if (rawTranscriptRef.current) {
+      rawTranscriptRef.current.scrollTop =
+        rawTranscriptRef.current.scrollHeight;
+    }
+  }, [transcription]);
+
+  // Scroll the Summary box to the bottom when new summary text is added
+  useEffect(() => {
+    if (summaryRef.current) {
+      summaryRef.current.scrollTop = summaryRef.current.scrollHeight;
+    }
+  }, [summary]);
+
   return (
     <VStack
       spacing={2}
@@ -518,6 +536,7 @@ const App: React.FC = () => {
               </TabList>
               <TabPanels>
                 <TabPanel
+                  ref={rawTranscriptRef}
                   width="100%"
                   height={475}
                   p={3}
@@ -570,6 +589,7 @@ const App: React.FC = () => {
               </TabPanels>
             </Tabs>
             <Box
+              ref={summaryRef}
               flex="1"
               width="100%"
               height={600}
