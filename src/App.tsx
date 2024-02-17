@@ -35,7 +35,8 @@ import {
 
 import shslogo from "./assets/singhealth-logo.png";
 import shsdividerlogo from "./assets/shs-divider.png";
-import shsbackground from "./assets/shs-background.png";
+import shsbackground from "./assets/SingScribe_Design.png";
+import soundwave from "./assets/soundwave.gif";
 import {
   ConversationTranscriber,
   SpeechConfig,
@@ -67,6 +68,10 @@ const App: React.FC = () => {
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [timer, setTimer] = useState(0);
+  const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(
+    null
+  );
 
   const rawTranscriptRef = useRef<HTMLDivElement | null>(null);
   const summaryRef = useRef<HTMLDivElement | null>(null);
@@ -140,6 +145,11 @@ const App: React.FC = () => {
       setConversationTranscriber(transcriber);
       setRecording(true);
 
+      // Start the timer
+      const interval = setInterval(() => {
+        setTimer((prevTimer) => prevTimer + 1);
+      }, 1000);
+      setTimerInterval(interval);
       // Display toast message for starting recording
       toast({
         title: "Recording has started",
@@ -186,6 +196,11 @@ const App: React.FC = () => {
       [transcript],
       "en"
     );
+    if (timerInterval) {
+      clearInterval(timerInterval);
+    }
+    setTimerInterval(null);
+    setTimer(0);
     const res = encryptresponse[0]; // Assuming one document is sent
     if ("error" in res && res.error !== undefined) {
       throw new Error(res.error.message);
@@ -396,43 +411,25 @@ const App: React.FC = () => {
     }
   }, [summary]);
 
+  useEffect(() => {
+    return () => {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+    };
+  }, [timerInterval]);
+
   return (
     <VStack
       spacing={2}
       p={4}
-      backgroundColor="gray.100"
-      style={{ minHeight: "100vh" }}
+      style={{
+        minHeight: "100vh",
+        background: `url(${shsbackground}) no-repeat center center fixed`, // Set background image here
+        backgroundSize: "contain", // Ensure it covers the whole page
+        width: "100vw", // Ensure it spans the full width
+      }}
     >
-      <Box
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-        textAlign="center"
-        borderRadius="lg" // rounded corners
-        boxShadow="lg" // shadow effect
-        p={1} // padding
-        bg="white" // white background
-        w="70%" // limit width
-        // center the card
-      >
-        <HStack justifyContent="space-between" width="90%">
-          <img src={shslogo} alt="SingHealth Logo" width={163} height={80} />
-
-          <Text fontSize="xl" fontWeight="normal" color="black" align="center">
-            Voice to Text Transcription and summarization
-          </Text>
-          <Text fontSize="3xl" fontWeight="bold" color="#E54809" align="center">
-            Sing-Scribe
-          </Text>
-        </HStack>
-        <img
-          src={shsdividerlogo}
-          alt="SingHealth Divider"
-          width="1000px"
-          height="10px"
-        />
-      </Box>
-
       {!isAuthenticated ? (
         <Box
           display="flex"
@@ -442,10 +439,10 @@ const App: React.FC = () => {
           textAlign="center"
           height="100vh"
           width="100vw"
-          bgImage={`url(${shsbackground})`}
-          bgPosition="center"
-          bgRepeat="no-repeat"
-          bgSize="cover"
+          // bgImage={`url(${shsbackground})`}
+          // bgPosition="center"
+          // bgRepeat="no-repeat"
+          // bgSize="cover"
         >
           <Box
             backgroundColor="rgba(255, 255, 255, 0.6)" // Semi-transparent white background
@@ -510,9 +507,25 @@ const App: React.FC = () => {
           <Button
             colorScheme={recording ? "blue" : "orange"}
             onClick={toggleRecording}
+            marginTop={120}
           >
             {recording ? "Stop Recording" : "Start Recording"}
           </Button>
+          {recording && (
+            <>
+              <img src={soundwave} alt="Soundwave" width="100" height="100" />
+              <Text fontSize={25} fontWeight={"bold"} color={"orange"}>
+                {Math.floor(timer / 3600)
+                  .toString()
+                  .padStart(2, "0")}
+                :
+                {Math.floor((timer % 3600) / 60)
+                  .toString()
+                  .padStart(2, "0")}
+                :{(timer % 60).toString().padStart(2, "0")}
+              </Text>
+            </>
+          )}
           <HStack spacing={4} width="100%">
             <Tabs
               flex="1"
