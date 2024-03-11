@@ -8,8 +8,8 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<UserRecording />} />
-        <Route path="/retrival" element={<Retrival />} />
+        <Route path="/" element={<Retrival />} />
+        <Route path="/retrival" element={<UserRecording />} />
       </Routes>
     </Router>
   );
