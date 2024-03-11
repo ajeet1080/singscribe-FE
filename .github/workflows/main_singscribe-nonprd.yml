@@ -33,6 +33,7 @@ jobs:
           npm install --legacy-peer-deps @azure/cosmos
           npm install react-quill
           npm install react-dom
+          npm install react-router-dom
           npm run build --if-present
           npm run test --if-present
         # Other scripts if configured should be added here, such as linting, formating
