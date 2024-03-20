@@ -200,29 +200,28 @@ const UserRecording: React.FC = () => {
     });
 
     const querySpec = {
-      query: "SELECT VALUE MAX(c.id) FROM c",
+      query: "SELECT c.id FROM c",
     };
 
     const { resources: items } = await container.items
       .query(querySpec)
       .fetchAll();
 
-    const lastId = items[0];
-    const newId = lastId !== null ? String(Number(lastId) + 1) : "1";
+    const ids = items.map((item) => Number(item.id));
+    const maxId = Math.max(...ids);
+    const newId = String(maxId + 1);
     setUCode(newId);
-
-    const uniqueCode = newId; // Implement this function to generate a unique code
 
     // Save the data
     const { resource: createdItem } = await container.items.create({
-      id: uniqueCode,
+      id: newId,
       summary,
       transcript,
       updatedSummary: "",
     });
 
-    // Return the unique code so it can be shared
-    return uniqueCode;
+    // Return the new id
+    //return newId;
   };
 
   const stopRecording = async () => {
