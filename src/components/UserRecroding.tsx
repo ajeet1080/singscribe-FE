@@ -31,6 +31,7 @@ import {
   Stack,
   Radio,
   Input,
+  Checkbox,
 } from "@chakra-ui/react";
 
 import shslogo from "../assets/singhealth-logo.png";
@@ -80,6 +81,7 @@ const UserRecording: React.FC = () => {
   const [summaryText, setSummaryText] = useState<string>("");
   const [formattedText, setFormattedText] = useState<string>("");
   const [uCode, setUCode] = useState<string>("");
+  const [userConsent, setUserConsent] = useState<boolean>(false);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -106,6 +108,9 @@ const UserRecording: React.FC = () => {
   const handleLanguageChange = (value: string) => {
     setLanguage(value);
     setLanguageSelected(true);
+  };
+  const handleUserConsent = () => {
+    setUserConsent(!userConsent);
   };
 
   const handleLogin = () => {
@@ -394,6 +399,8 @@ const UserRecording: React.FC = () => {
               const { delta } = choices[0];
 
               if (delta) {
+                // wait for 1 second
+                await new Promise((resolve) => setTimeout(resolve, 100));
                 setSummary((currentSummary) =>
                   currentSummary
                     ? `${currentSummary}${delta.content}`
@@ -540,7 +547,7 @@ const UserRecording: React.FC = () => {
               align="center"
               mb={4}
             >
-              Login to Sing-Scribe
+              Login to NoteBuddy
             </Text>
             <Input
               placeholder="User ID"
@@ -565,190 +572,229 @@ const UserRecording: React.FC = () => {
         </Box>
       ) : (
         <>
-          <Modal isOpen={isOpen} onClose={onClose}>
-            <ModalOverlay />
-            <ModalContent>
-              <ModalHeader>Select a language</ModalHeader>
-              <ModalCloseButton />
-              <ModalBody>
-                <RadioGroup onChange={handleLanguageChange} value={language}>
-                  <Stack direction="column">
-                    <Radio value="en-SG">English</Radio>
-                    <Radio value="zh-CN">Mandarin</Radio>
-                    <Radio value="id-ID">Bahasa</Radio>
-                    <Radio value="ta-IN">Tamil</Radio>
-                  </Stack>
-                </RadioGroup>
-              </ModalBody>
-              <ModalFooter>
-                <Button colorScheme="blue" mr={3} onClick={onClose}>
-                  Close
-                </Button>
-              </ModalFooter>
-            </ModalContent>
-          </Modal>
-          <HStack spacing={4} width="100%" justifyContent="center">
-            <Button
-              colorScheme={recording ? "blue" : "orange"}
-              onClick={toggleRecording}
-              marginTop={120}
-            >
-              {recording ? "Stop Recording" : "Start Recording"}
-            </Button>
-
-            <Button
-              colorScheme={isGenerateLoading ? "green" : "white"}
-              onClick={handleGenerate}
-              marginTop={120}
-            >
-              {isGenerateLoading ? "Get code" : ""}
-            </Button>
-          </HStack>
-          <Text fontSize="3xl" fontWeight="bold" color="blackAlpha.700">
-            {uCode}
-          </Text>
-
-          {recording && (
-            <>
-              <img src={soundwave} alt="Soundwave" width="100" height="100" />
-              <Text fontSize={25} fontWeight={"bold"} color={"orange"}>
-                {Math.floor(timer / 3600)
-                  .toString()
-                  .padStart(2, "0")}
-                :
-                {Math.floor((timer % 3600) / 60)
-                  .toString()
-                  .padStart(2, "0")}
-                :{(timer % 60).toString().padStart(2, "0")}
-              </Text>
-            </>
-          )}
-          <HStack spacing={4} width="100%">
-            <Tabs
-              flex="1"
-              width="100%"
-              height={600}
-              p={3}
+          {/* User consent form after login */}
+          {!userConsent && (
+            <Box
+              marginTop={150}
+              p={8}
               borderRadius="md"
               boxShadow="lg"
               bg="white"
             >
-              <Text fontSize="2xl" fontWeight="bold" color="#E54809">
-                Transcript
+              <Text fontSize="xl" fontWeight="bold" color="#E54809" mb={4}>
+                User Consent
               </Text>
-              <TabList>
-                <Tab _selected={{ color: "#E54809", borderColor: "#E54809" }}>
-                  Raw Transcript
-                </Tab>
-                <Tab _selected={{ color: "#E54809", borderColor: "#E54809" }}>
-                  Formatted Transcript
-                </Tab>
-              </TabList>
-              <TabPanels>
-                <TabPanel
-                  ref={rawTranscriptRef}
-                  width="100%"
-                  height={475}
-                  p={3}
-                  borderRadius="md"
-                  overflow="auto"
-                >
-                  {transcription.map((t, index) => (
-                    <p
-                      key={index}
-                      style={{
-                        color: t.speakerId === "Guest-1" ? "blue" : "red",
-                      }}
+              <Checkbox
+                size="lg"
+                colorScheme="orange"
+                onChange={handleUserConsent}
+              >
+                <Text fontSize="lg">
+                  Patient agrees to the recording of the conversation.
+                </Text>
+              </Checkbox>
+            </Box>
+          )}
+          {userConsent && (
+            <>
+              <Modal isOpen={isOpen} onClose={onClose}>
+                <ModalOverlay />
+                <ModalContent>
+                  <ModalHeader>Select a language</ModalHeader>
+                  <ModalCloseButton />
+                  <ModalBody>
+                    <RadioGroup
+                      onChange={handleLanguageChange}
+                      value={language}
                     >
-                      {t.speakerId} : {t.text}
-                    </p>
-                  ))}
-                </TabPanel>
-                <TabPanel
+                      <Stack direction="column">
+                        <Radio value="en-SG">English</Radio>
+                        <Radio value="zh-CN">Mandarin</Radio>
+                        <Radio value="id-ID">Bahasa</Radio>
+                        <Radio value="ta-IN">Tamil</Radio>
+                      </Stack>
+                    </RadioGroup>
+                  </ModalBody>
+                  <ModalFooter>
+                    <Button colorScheme="blue" mr={3} onClick={onClose}>
+                      Close
+                    </Button>
+                  </ModalFooter>
+                </ModalContent>
+              </Modal>
+              <HStack spacing={4} width="100%" justifyContent="center">
+                <Button
+                  colorScheme={recording ? "blue" : "orange"}
+                  onClick={toggleRecording}
+                  marginTop={120}
+                >
+                  {recording ? "Stop Recording" : "Start Recording"}
+                </Button>
+
+                <Button
+                  colorScheme={isGenerateLoading ? "green" : "white"}
+                  onClick={handleGenerate}
+                  marginTop={120}
+                >
+                  {isGenerateLoading ? "Get code" : ""}
+                </Button>
+              </HStack>
+              <Text fontSize="3xl" fontWeight="bold" color="blackAlpha.700">
+                {uCode}
+              </Text>
+
+              {recording && (
+                <>
+                  <img
+                    src={soundwave}
+                    alt="Soundwave"
+                    width="100"
+                    height="100"
+                  />
+                  <Text fontSize={25} fontWeight={"bold"} color={"orange"}>
+                    {Math.floor(timer / 3600)
+                      .toString()
+                      .padStart(2, "0")}
+                    :
+                    {Math.floor((timer % 3600) / 60)
+                      .toString()
+                      .padStart(2, "0")}
+                    :{(timer % 60).toString().padStart(2, "0")}
+                  </Text>
+                </>
+              )}
+              <HStack spacing={4} width="100%">
+                <Tabs
+                  flex="1"
                   width="100%"
-                  height={475}
+                  height={600}
                   p={3}
                   borderRadius="md"
-                  overflow="auto"
+                  boxShadow="lg"
+                  bg="white"
                 >
-                  {isLoadingTranscript ? (
-                    <Spinner
-                      label="Formating transcript, please wait..."
-                      size="xl"
-                      color="#E54809"
+                  <Text fontSize="2xl" fontWeight="bold" color="#E54809">
+                    Transcript
+                  </Text>
+                  <TabList>
+                    <Tab
+                      _selected={{ color: "#E54809", borderColor: "#E54809" }}
+                    >
+                      Raw Transcript
+                    </Tab>
+                    <Tab
+                      _selected={{ color: "#E54809", borderColor: "#E54809" }}
+                    >
+                      Formatted Transcript
+                    </Tab>
+                  </TabList>
+                  <TabPanels>
+                    <TabPanel
+                      ref={rawTranscriptRef}
+                      width="100%"
+                      height={475}
+                      p={3}
+                      borderRadius="md"
+                      overflow="auto"
+                    >
+                      {transcription.map((t, index) => (
+                        <p
+                          key={index}
+                          style={{
+                            color: t.speakerId === "Guest-1" ? "blue" : "red",
+                          }}
+                        >
+                          {t.speakerId} : {t.text}
+                        </p>
+                      ))}
+                    </TabPanel>
+                    <TabPanel
+                      width="100%"
+                      height={475}
+                      p={3}
+                      borderRadius="md"
+                      overflow="auto"
+                    >
+                      {isLoadingTranscript ? (
+                        <Spinner
+                          label="Formating transcript, please wait..."
+                          size="xl"
+                          color="#E54809"
+                        />
+                      ) : (
+                        formattedTranscript
+                          .split("\n")
+                          .filter((line) => line.trim() !== ":")
+                          .map((line, index) => {
+                            const [speaker, text] = line.split(": ");
+                            return (
+                              <p
+                                key={index}
+                                style={{
+                                  color: speaker === "Doctor" ? "blue" : "red",
+                                }}
+                              >
+                                {speaker} : {text}
+                              </p>
+                            );
+                          })
+                      )}
+                    </TabPanel>
+                  </TabPanels>
+                </Tabs>
+                <Box
+                  ref={summaryRef}
+                  flex="1"
+                  width="100%"
+                  height={600}
+                  p={3}
+                  borderRadius="md"
+                  boxShadow="lg"
+                  bg="white"
+                >
+                  <Text fontSize="2xl" fontWeight="bold" color="#E54809">
+                    Summary
+                  </Text>
+                  {isEditing ? (
+                    <Button onClick={handleSave} m={2}>
+                      Save
+                    </Button>
+                  ) : (
+                    <Button onClick={handleEdit} m={2}>
+                      Edit (with HTML)
+                    </Button>
+                  )}{" "}
+                  <Button onClick={handleCopy} m={2}>
+                    Copy
+                  </Button>
+                  {isLoadingSummary ? (
+                    <Spinner size="xl" color="#E54809" />
+                  ) : isEditing ? (
+                    <Textarea
+                      width="100%"
+                      height={475}
+                      p={3}
+                      borderRadius="md"
+                      value={summary}
+                      onChange={(e) => setSummary(e.target.value)}
+                      overflow={"auto"}
                     />
                   ) : (
-                    formattedTranscript
-                      .split("\n")
-                      .filter((line) => line.trim() !== ":")
-                      .map((line, index) => {
-                        const [speaker, text] = line.split(": ");
-                        return (
-                          <p
-                            key={index}
-                            style={{
-                              color: speaker === "Doctor" ? "blue" : "red",
-                            }}
-                          >
-                            {speaker} : {text}
-                          </p>
-                        );
-                      })
+                    <Box
+                      width="100%"
+                      height={475}
+                      p={3}
+                      borderRadius="md"
+                      overflow={"auto"}
+                      dangerouslySetInnerHTML={{
+                        __html: summary,
+                      }}
+                    />
                   )}
-                </TabPanel>
-              </TabPanels>
-            </Tabs>
-            <Box
-              ref={summaryRef}
-              flex="1"
-              width="100%"
-              height={600}
-              p={3}
-              borderRadius="md"
-              boxShadow="lg"
-              bg="white"
-            >
-              <Text fontSize="2xl" fontWeight="bold" color="#E54809">
-                Summary
-              </Text>
-              {isEditing ? (
-                <Button onClick={handleSave} m={2}>
-                  Save
-                </Button>
-              ) : (
-                <Button onClick={handleEdit} m={2}>
-                  Edit (with HTML)
-                </Button>
-              )}{" "}
-              <Button onClick={handleCopy} m={2}>
-                Copy
-              </Button>
-              {isLoadingSummary ? (
-                <Spinner size="xl" color="#E54809" />
-              ) : isEditing ? (
-                <Textarea
-                  width="100%"
-                  height={475}
-                  p={3}
-                  borderRadius="md"
-                  value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
-                  overflow={"auto"}
-                />
-              ) : (
-                <Box
-                  width="100%"
-                  height={475}
-                  p={3}
-                  borderRadius="md"
-                  overflow={"auto"}
-                  dangerouslySetInnerHTML={{
-                    __html: summary,
-                  }}
-                />
-              )}
-            </Box>
-          </HStack>
+                </Box>
+              </HStack>
+            </>
+          )}
         </>
       )}
     </VStack>
