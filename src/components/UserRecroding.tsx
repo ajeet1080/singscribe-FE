@@ -113,18 +113,65 @@ const UserRecording: React.FC = () => {
     setUserConsent(!userConsent);
   };
 
-  const handleLogin = () => {
-    // Simple authentication check (in a real app, you would check against a server)
-    if (userId.trim() === "user01" && password.trim() === "SingHealth123$") {
-      setIsAuthenticated(true);
-    } else {
-      toast({
-        title: "Authentication failed",
-        description: "Please enter a valid user ID and password.",
-        status: "error",
-        duration: 3000,
-        isClosable: true,
+  const handleLogin = async () => {
+    try {
+      // Initialize Cosmos DB client
+      const cosmosDBClient = new CosmosClient({
+        endpoint: "https://singscribe-cosmosdb.documents.azure.com:443/",
+        key: "SjcL1sPNRelpz9IyBzXL1Aww9smwQALhmPxGikKauJ8H0C1CzXQU3SZ09Scfyg85CxQcPrWNAmS8ACDb2jcm4Q==",
       });
+
+      const databaseId = "notebuddy";
+      const containerId = "users";
+
+      // Get or create the database and container
+      const { database } = await cosmosDBClient.databases.createIfNotExists({
+        id: databaseId,
+      });
+      const { container } = await database.containers.createIfNotExists({
+        id: containerId,
+      });
+
+      // Query for the user document
+      const querySpec = {
+        query: "SELECT * FROM c WHERE c.username = @username",
+        parameters: [
+          {
+            name: "@username",
+            value: userId, // Replace with the actual username
+          },
+        ],
+      };
+
+      const { resources: items } = await container.items
+        .query(querySpec)
+        .fetchAll();
+
+      if (items.length > 0) {
+        const user = items[0];
+        if (user.password === password) {
+          setIsAuthenticated(true);
+        } else {
+          toast({
+            title: "Login failed",
+            description: "Invalid password.",
+            status: "error",
+            duration: 5000,
+            isClosable: true,
+          });
+        }
+      } else {
+        toast({
+          title: "Login failed",
+          description: "User not found.",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      console.error("Error while authenticating:", error);
+      // Handle error (e.g., show an error message to the user)
     }
   };
 
@@ -220,6 +267,7 @@ const UserRecording: React.FC = () => {
     // Save the data
     const { resource: createdItem } = await container.items.create({
       id: newId,
+      user: userId,
       summary,
       transcript,
       updatedSummary: "",
@@ -315,7 +363,7 @@ const UserRecording: React.FC = () => {
 
     try {
       const response = await fetch(
-        "https://shplayground2.openai.azure.com/openai/deployments/4Base/chat/completions?api-version=2023-07-01-preview",
+        "https://shplayground2.openai.azure.com/openai/deployments/432/chat/completions?api-version=2024-02-15-preview",
         {
           method: "POST",
           headers: {
@@ -419,7 +467,7 @@ const UserRecording: React.FC = () => {
 
     try {
       const response = await fetch(
-        "https://shplayground2.openai.azure.com/openai/deployments/4Base/chat/completions?api-version=2023-07-01-preview",
+        "https://shplayground2.openai.azure.com/openai/deployments/432/chat/completions?api-version=2024-02-15-preview",
         {
           method: "POST",
           headers: {
