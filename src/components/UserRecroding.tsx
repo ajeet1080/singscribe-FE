@@ -638,7 +638,9 @@ const UserRecording: React.FC = () => {
                 onChange={handleUserConsent}
               >
                 <Text fontSize="lg">
-                  Patient agrees to the recording of the conversation.
+                  The patient consented to be part of the pilot test for a
+                  Generative AI powered assistive tool for clinical
+                  documentation.
                 </Text>
               </Checkbox>
             </Box>
@@ -658,7 +660,7 @@ const UserRecording: React.FC = () => {
                       <Stack direction="column">
                         <Radio value="en-SG">English</Radio>
                         <Radio value="zh-CN">Mandarin</Radio>
-                        <Radio value="id-ID">Bahasa</Radio>
+                        <Radio value="id-ID">Malay</Radio>
                         <Radio value="ta-IN">Tamil</Radio>
                       </Stack>
                     </RadioGroup>
