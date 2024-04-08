@@ -226,24 +226,23 @@ const UserRecording: React.FC = () => {
     }
   };
 
-  const cosmosClient = new CosmosClient({
-    endpoint: "https://singscribe-cosmosdb.documents.azure.com:443/",
-    key: "SjcL1sPNRelpz9IyBzXL1Aww9smwQALhmPxGikKauJ8H0C1CzXQU3SZ09Scfyg85CxQcPrWNAmS8ACDb2jcm4Q==",
-  });
-
-  const databaseId = "notebuddy";
-  const containerId = "summaries";
-
-  const generateUniqueCode = () => {
-    // Implement your code generation logic here
-    // For simplicity, we'll use a random number as an example
-
-    setUCode(Math.random().toString(36).substr(2, 9));
-    return uCode;
-  };
-
   // Function to save transcript and summary to Cosmos DB
   const saveToCosmosDB = async (summary: string, transcript: string) => {
+    const cosmosClient = new CosmosClient({
+      endpoint: "https://singscribe-cosmosdb.documents.azure.com:443/",
+      key: "SjcL1sPNRelpz9IyBzXL1Aww9smwQALhmPxGikKauJ8H0C1CzXQU3SZ09Scfyg85CxQcPrWNAmS8ACDb2jcm4Q==",
+    });
+
+    const databaseId = "notebuddy";
+    const containerId = "summaries";
+
+    const generateUniqueCode = () => {
+      // Implement your code generation logic here
+      // For simplicity, we'll use a random number as an example
+
+      setUCode(Math.random().toString(36).substr(2, 9));
+      return uCode;
+    };
     const { database } = await cosmosClient.databases.createIfNotExists({
       id: databaseId,
     });
@@ -319,46 +318,9 @@ const UserRecording: React.FC = () => {
       .join("\n");
     // setIsLoading(true);
     setIsLoading(true);
-    const textAnalyticsClient = new TextAnalyticsClient(
-      "https://text-analytics-demo1.cognitiveservices.azure.com/",
-      new AzureKeyCredential("f0c9555dd72f452192efd53cdf422996")
-    );
 
-    const encryptresponse = await textAnalyticsClient.recognizePiiEntities(
-      [transcript],
-      "en"
-    );
-    if (timerInterval) {
-      clearInterval(timerInterval);
-    }
-    setTimerInterval(null);
-    setTimer(0);
-    const res = encryptresponse[0]; // Assuming one document is sent
-    if ("error" in res && res.error !== undefined) {
-      throw new Error(res.error.message);
-    }
     let encryptedText = transcript;
-    const entities = res.entities
-      .filter(
-        (entity) =>
-          entity.category === "Person" ||
-          entity.category === "SGNationalRegistrationIdentityCardNumber" ||
-          entity.category === "Email" ||
-          entity.category === "PhoneNumber" ||
-          entity.category === "Address"
-      )
-      .map((entity) => {
-        // Encrypt only Person and Email PII entities
-        const encryptedValue = CryptoJS.AES.encrypt(
-          entity.text,
-          "secret key 123"
-        ).toString();
-        // Replace these PII entities with encrypted values
-        encryptedText = encryptedText.replace(
-          new RegExp(entity.text, "g"),
-          encryptedValue
-        );
-      });
+
     setEncryptedTranscript(encryptedText);
 
     try {
