@@ -103,6 +103,30 @@ const Retrival: React.FC = () => {
     ],
   };
 
+  const handleCopy = async () => {
+    try {
+      // Remove HTML tags from the summary before copying
+      const plainTextSummary = summary.replace(/<[^>]+>/g, "");
+      await navigator.clipboard.writeText(plainTextSummary);
+      toast({
+        title: "Summary copied",
+        description: "The summary has been copied to clipboard.",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      console.error("Failed to copy text: ", err);
+      toast({
+        title: "Copy failed",
+        description: "Failed to copy the summary to clipboard.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
   const updateSummaryInCosmosDB = async () => {
     if (!data || !summary) {
       toast({
@@ -213,6 +237,9 @@ const Retrival: React.FC = () => {
                 width="10%"
               >
                 Edit
+              </Button>{" "}
+              <Button onClick={handleCopy} m={2}>
+                Copy
               </Button>
               {isEditing ? (
                 <Button
