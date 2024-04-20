@@ -965,9 +965,12 @@ const UserRecording: React.FC = () => {
                       height={475}
                       p={3}
                       borderRadius="md"
-                      overflow={"auto"}
+                      overflow="auto"
                       dangerouslySetInnerHTML={{
-                        __html: summary,
+                        __html: summary
+                          .split("\n")
+                          .map((line) => `<p>${line}</br></p>`)
+                          .join(""),
                       }}
                     />
                   )}
