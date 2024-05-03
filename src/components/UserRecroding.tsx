@@ -623,6 +623,9 @@ const UserRecording: React.FC = () => {
   }, [timerInterval]);
 
   // Initialize Cosmos DB client
+  const formatSummaryForDisplay = (summary: string) => {
+    return summary.replace(/\n/g, "<br>");
+  };
 
   return (
     <VStack
@@ -967,7 +970,13 @@ const UserRecording: React.FC = () => {
                       borderRadius="md"
                       overflow="auto"
                       dangerouslySetInnerHTML={{
-                        __html: summary,
+                        //Define summary before calling split
+                        __html: summary
+                          ? summary
+                              .split("\n")
+                              .map((line) => `<p>${line}</br></p>`)
+                              .join("")
+                          : "",
                       }}
                     />
                   )}
