@@ -361,12 +361,12 @@ const UserRecording: React.FC = () => {
     setSummaryText("");
     try {
       const response = await fetch(
-        "https://shplayground2.openai.azure.com/openai/deployments/432/chat/completions?api-version=2024-02-15-preview",
+        "https://singhealth-openai-02.openai.azure.com/openai/deployments/gpt4v/chat/completions?api-version=2024-02-15-preview",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "api-key": "fefc20d1c3ee4046b446c239f96e4fc4",
+            "api-key": "2841bd672d9147288f5ba44124ea37bd",
           },
           body: JSON.stringify({
             messages: [
@@ -454,12 +454,12 @@ const UserRecording: React.FC = () => {
 
     try {
       const response = await fetch(
-        "https://shplayground2.openai.azure.com/openai/deployments/432/chat/completions?api-version=2024-02-15-preview",
+        "https://singhealth-openai-02.openai.azure.com/openai/deployments/gpt4v/chat/completions?api-version=2024-02-15-preview",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "api-key": "fefc20d1c3ee4046b446c239f96e4fc4",
+            "api-key": "2841bd672d9147288f5ba44124ea37bd",
           },
           body: JSON.stringify({
             messages: [
@@ -535,12 +535,12 @@ const UserRecording: React.FC = () => {
 
     try {
       const response = await fetch(
-        "https://shplayground2.openai.azure.com/openai/deployments/432/chat/completions?api-version=2024-02-15-preview",
+        "https://singhealth-openai-02.openai.azure.com/openai/deployments/gpt4v/chat/completions?api-version=2024-02-15-preview",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "api-key": "fefc20d1c3ee4046b446c239f96e4fc4",
+            "api-key": "2841bd672d9147288f5ba44124ea37bd",
           },
           body: JSON.stringify({
             messages: [
@@ -967,10 +967,7 @@ const UserRecording: React.FC = () => {
                       borderRadius="md"
                       overflow="auto"
                       dangerouslySetInnerHTML={{
-                        __html: summary
-                          .split("\n")
-                          .map((line) => `<p>${line}</br></p>`)
-                          .join(""),
+                        __html: summary,
                       }}
                     />
                   )}
