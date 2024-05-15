@@ -357,6 +357,16 @@ const UserRecording: React.FC = () => {
     }
   };
 
+  // Your toBase64 function
+  function toBase64(input: string) {
+    const bytes = new TextEncoder().encode(input);
+    let binString = "";
+    for (let i = 0; i < bytes.length; i++) {
+      binString += String.fromCodePoint(bytes[i]);
+    }
+    return btoa(binString);
+  }
+
   const regererateSummary = async () => {
     setSummary("");
     setIsLoadingSummary(true);
@@ -384,6 +394,13 @@ const UserRecording: React.FC = () => {
         console.error("Error:", error);
       }
     }
+
+    const message =
+      prompt +
+      "\n*********************************************\n Refer below actual transcript:\n\n" +
+      encryptedTranscript;
+
+    const encodedMessage = toBase64(message);
 
     try {
       const jwt = await getJwtToken();
@@ -413,10 +430,7 @@ const UserRecording: React.FC = () => {
         body: JSON.stringify({
           userId: "notebudy@singhealth.com.sg",
           func_bypass: "",
-          message:
-            prompt +
-            "\n*********************************************\n Refer below actual transcript:\n\n" +
-            encryptedTranscript,
+          message: encodedMessage,
           chat_model: "gpt4",
         }),
       });
