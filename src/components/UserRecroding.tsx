@@ -460,7 +460,7 @@ const UserRecording: React.FC = () => {
 
     try {
       const jwt = await getJwtToken();
-      const response = await fetch("/TandemApi", {
+      const response = await fetch("https://nprd-synapxechat.com/TandemApi", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -591,7 +591,7 @@ const UserRecording: React.FC = () => {
       const encodedMessage = toBase64(message);
       try {
         const jwt = await getJwtToken();
-        const response = await fetch("/TandemApi", {
+        const response = await fetch("https://nprd-synapxechat.com/TandemApi", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -688,7 +688,7 @@ const UserRecording: React.FC = () => {
         encryptedText;
 
       const encodedMessage = toBase64(message);
-      const response = await fetch("/TandemApi", {
+      const response = await fetch("https://nprd-synapxechat.com/TandemApi", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
