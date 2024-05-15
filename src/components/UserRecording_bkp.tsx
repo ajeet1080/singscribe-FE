@@ -55,6 +55,7 @@ import {
   Image,
   Tooltip,
   Icon,
+  Center,
 } from "@chakra-ui/react";
 
 import shslogo from "../assets/singhealth-logo.png";
@@ -73,6 +74,7 @@ import prompt_uro from "../prompts/uro";
 import clear_all from "../assets/clear_all.jpg";
 import logo from "../assets/singhealth_logo_clear.png";
 import { SmallCloseIcon, StarIcon, InfoOutlineIcon } from "@chakra-ui/icons";
+import kanan from "../assets/login_kanan.png";
 
 useColorModeValue;
 
@@ -140,6 +142,10 @@ const UserRecording: React.FC = () => {
 
   const [feedbackSubmit, setFeedbackSubmit] = useState<boolean>(false);
 
+  const [showConsentModal, setShowConsentModal] = useState(false);
+
+  const onCloseConsentModal = () => setShowConsentModal(false);
+
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setPrompt(e.target.value);
   };
@@ -175,7 +181,10 @@ const UserRecording: React.FC = () => {
     return false;
   };
   const handleUserConsent = () => {
-    setUserConsent(!userConsent);
+    // setUserConsent(!userConsent);
+
+    setIsAuthenticated(true);
+    setUserConsent(true);
   };
 
   const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -241,7 +250,8 @@ const UserRecording: React.FC = () => {
       if (items.length > 0) {
         const user = items[0];
         if (user.password === password) {
-          setIsAuthenticated(true);
+          // setIsAuthenticated(true);
+          setShowConsentModal(true);
         } else {
           toast({
             title: "Login failed",
@@ -403,37 +413,83 @@ const UserRecording: React.FC = () => {
     }
   };
 
+  // Your toBase64 function
+  function toBase64(input: string) {
+    const bytes = new TextEncoder().encode(input);
+    let binString = "";
+    for (let i = 0; i < bytes.length; i++) {
+      binString += String.fromCodePoint(bytes[i]);
+    }
+    return btoa(binString);
+  }
+
   const regererateSummary = async () => {
     setSummary("");
     setIsLoadingSummary(true);
     setSummaryText("");
-    try {
-      const response = await fetch(
-        "https://singhealth-openai-03.openai.azure.com/openai/deployments/chat4/chat/completions?api-version=2024-02-15-preview",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "api-key": "f50c2f94adc443178fb2ddf07dd048ea",
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                role: "system",
-                content: prompt,
-              },
-              {
-                role: "assistant",
-                content: encryptedTranscript,
-              },
-            ],
-            temperature: 0.2,
-            top_p: 1,
-            max_tokens: 1000,
-            stream: true,
-          }),
+    // get jwt token by calling get api https://tandem01.azurewebsites.net/api/gettoken . Output json has feild called token
+    async function getJwtToken() {
+      try {
+        const response = await fetch(
+          "https://tandem01.azurewebsites.net/api/gettoken",
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      );
+
+        const result = await response.json();
+        return result.token;
+      } catch (error) {
+        console.error("Error:", error);
+      }
+    }
+
+    const message =
+      prompt +
+      "\n*********************************************\n Refer below actual transcript:\n\n" +
+      encryptedTranscript;
+
+    const encodedMessage = toBase64(message);
+
+    try {
+      const jwt = await getJwtToken();
+      const response = await fetch("https://nprd-synapxechat.com/TandemApi", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          APIKey: "5eb165be933e4eb18b8882d40857266c",
+          Authorization: `Bearer ${jwt}`,
+          user: "sia.chen.han@synapxe.sg",
+          Timestamp:
+            new Date()
+              .toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              })
+              .replace(/\//g, "-") +
+            " " +
+            new Date().toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: false,
+            }),
+        },
+        body: JSON.stringify({
+          userId: "notebudy@singhealth.com.sg",
+          func_bypass: "",
+          message: encodedMessage,
+          chat_model: "gpt4",
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -442,9 +498,11 @@ const UserRecording: React.FC = () => {
       if (response.body) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
+        let summary = ""; // Define summary here
+        let lastResponse = ""; // Keep track of the last response
+
         while (true) {
-          const chunk = await reader.read();
-          const { done, value } = chunk;
+          const { done, value } = await reader.read();
           if (done) {
             break;
           }
@@ -463,30 +521,30 @@ const UserRecording: React.FC = () => {
               }
             })
             .map((line) => JSON.parse(line.replace(/^data: /, "")));
+          setIsLoadingSummary(false); // Update the loading state
+
           for (const parsedLine of parsedLines) {
-            const { choices } = parsedLine;
-
-            if (choices && choices.length > 0) {
-              const { delta } = choices[0];
-
-              if (delta) {
-                // wait for 1 second
-                await new Promise((resolve) => setTimeout(resolve, 100));
-                setSummary((currentSummary) =>
-                  currentSummary
-                    ? `${currentSummary}${delta.content}`
-                    : delta.content
-                );
-                setIsLoadingSummary(false);
-                setIsRatingOpen(true);
+            if (parsedLine.response && parsedLine.response !== lastResponse) {
+              await new Promise((resolve) => setTimeout(resolve, 100));
+              if (parsedLine.response.startsWith(lastResponse)) {
+                // If the new response is a continuation of the last response, only append the new part
+                summary += parsedLine.response.slice(lastResponse.length);
+              } else {
+                summary += parsedLine.response;
               }
+              lastResponse = parsedLine.response; // Update the last response
+              setSummaryText(summary);
+              setSummary(summary); // Update the state at the end of processing
             }
           }
+          setIsLoadingSummary(false);
         }
+
+        // Update the loading state
       }
-      setSummaryText(summary);
     } catch (error) {
       console.error("Error:", error);
+      setIsLoadingSummary(false); // Update the loading state in case of error
     }
   };
 
@@ -498,60 +556,168 @@ const UserRecording: React.FC = () => {
     setIsLoading(true);
 
     let encryptedText = transcript;
-    let detected_pii = [];
 
     setEncryptedTranscript(encryptedText);
 
-    try {
-      const encrypt_response = await fetch(
-        "https://tandem01.azurewebsites.net/api/encrypt",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            transcript: transcript,
-          }),
+    async function getJwtToken() {
+      try {
+        const response = await fetch(
+          "https://tandem01.azurewebsites.net/api/gettoken",
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      );
-      if (!encrypt_response.ok) {
-        throw new Error(`HTTP error! status: ${encrypt_response.status}`);
+
+        const result = await response.json();
+        return result.token;
+      } catch (error) {
+        console.error("Error:", error);
       }
-      const encrypt_result = await encrypt_response.json();
-      encryptedText = encrypt_result.encrypted_transcript;
-      detected_pii = encrypt_result.identified_pii;
-    } catch (error) {
-      console.error("Error:", error);
     }
 
-    try {
-      const response = await fetch(
-        "https://singhealth-openai-03.openai.azure.com/openai/deployments/chat4/chat/completions?api-version=2024-02-15-preview",
-        {
+    async function callTandemApi() {
+      const message =
+        prompt +
+        "\n*********************************************\n Refer below actual transcript:\n\n" +
+        encryptedText;
+
+      const encodedMessage = toBase64(message);
+      try {
+        const jwt = await getJwtToken();
+        const response = await fetch("https://nprd-synapxechat.com/TandemApi", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "api-key": "f50c2f94adc443178fb2ddf07dd048ea",
+            APIKey: "5eb165be933e4eb18b8882d40857266c",
+            Authorization: `Bearer ${jwt}`,
+            user: "sia.chen.han@synapxe.sg",
+            Timestamp:
+              new Date()
+                .toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                })
+                .replace(/\//g, "-") +
+              " " +
+              new Date().toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false,
+              }),
           },
           body: JSON.stringify({
-            messages: [
-              {
-                role: "system",
-                content: prompt,
-              },
-              {
-                role: "assistant",
-                content: encryptedText,
-              },
-            ],
-            temperature: 0.2,
-            top_p: 1,
-            max_tokens: 1000,
-            stream: true,
+            userId: "notebudy@singhealth.com.sg",
+            func_bypass: "",
+            message: encodedMessage,
+            chat_model: "gpt4",
           }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      );
+
+        if (response.body) {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let summary = ""; // Define summary here
+          let lastResponse = ""; // Keep track of the last response
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              break;
+            }
+            const decodedChunk = decoder.decode(value);
+            const lines = decodedChunk.split("\n");
+            const nonEmptyLines = lines.filter(
+              (line) => line !== "" && line !== "[DONE]"
+            );
+            const parsedLines = nonEmptyLines
+              .filter((line) => {
+                try {
+                  JSON.parse(line.replace(/^data: /, ""));
+                  return true;
+                } catch {
+                  return false;
+                }
+              })
+              .map((line) => JSON.parse(line.replace(/^data: /, "")));
+            setIsLoadingSummary(false); // Update the loading state
+
+            for (const parsedLine of parsedLines) {
+              if (parsedLine.response && parsedLine.response !== lastResponse) {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                if (parsedLine.response.startsWith(lastResponse)) {
+                  // If the new response is a continuation of the last response, only append the new part
+                  summary += parsedLine.response.slice(lastResponse.length);
+                } else {
+                  summary += parsedLine.response;
+                }
+                lastResponse = parsedLine.response; // Update the last response
+                setSummaryText(summary);
+                setSummary(summary); // Update the state at the end of processing
+              }
+            }
+            setIsLoadingSummary(false);
+          }
+
+          // Update the loading state
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        setIsLoadingSummary(false); // Update the loading state in case of error
+      }
+    }
+
+    callTandemApi();
+    try {
+      const jwt = await getJwtToken();
+      const message =
+        "You will be provided with a transcript of a conversation between a doctor and a patient in either of English, Mandarin, Indonesian or Tamil language. You need to reformat the transcript in English in a way that it is easy to read and understand. Please ensure to do proper tagging as Doctor, Patient. You can use any format provided in Sample Transcript below. Do not add any additional information to the transcript. Please replace encrypted text values with revelant masked values eg [Patient' Name] , [Patient's Email] , etc as applicable.  \n\nSample Transcript:\nDoctor: Hello, how are you?\nPatient: I am fine, thank you.\nDoctor: What brings you here today?\nPatient: I have a headache.\nDoctor: How long have you had it?\nPatient: For about a week." +
+        "\n*********************************************\n Refer below actual transcript:\n\n" +
+        encryptedText;
+
+      const encodedMessage = toBase64(message);
+      const response = await fetch("https://nprd-synapxechat.com/TandemApi", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          APIKey: "5eb165be933e4eb18b8882d40857266c",
+          Authorization: `Bearer ${jwt}`,
+          user: "sia.chen.han@synapxe.sg",
+          Timestamp:
+            new Date()
+              .toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              })
+              .replace(/\//g, "-") +
+            " " +
+            new Date().toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: false,
+            }),
+        },
+        body: JSON.stringify({
+          userId: "notebudy@singhealth.com.sg",
+          func_bypass: "",
+          message: encodedMessage,
+          chat_model: "gpt4",
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -560,9 +726,11 @@ const UserRecording: React.FC = () => {
       if (response.body) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
+        let formatted_text = ""; // Define summary here
+        let lastResponse = ""; // Keep track of the last response
+
         while (true) {
-          const chunk = await reader.read();
-          const { done, value } = chunk;
+          const { done, value } = await reader.read();
           if (done) {
             break;
           }
@@ -581,70 +749,36 @@ const UserRecording: React.FC = () => {
               }
             })
             .map((line) => JSON.parse(line.replace(/^data: /, "")));
+          setIsLoading(false); // Update the loading state
+          setIsLoadingTranscript(false);
+
           for (const parsedLine of parsedLines) {
-            const { choices } = parsedLine;
-
-            if (choices && choices.length > 0) {
-              const { delta } = choices[0];
-
-              if (delta) {
-                // wait for 1 second
-                await new Promise((resolve) => setTimeout(resolve, 100));
-                setSummary((currentSummary) =>
-                  currentSummary
-                    ? `${currentSummary}${delta.content}`
-                    : delta.content
+            if (parsedLine.response && parsedLine.response !== lastResponse) {
+              await new Promise((resolve) => setTimeout(resolve, 75));
+              if (parsedLine.response.startsWith(lastResponse)) {
+                // If the new response is a continuation of the last response, only append the new part
+                formatted_text += parsedLine.response.slice(
+                  lastResponse.length
                 );
-                setIsLoadingSummary(false);
+              } else {
+                formatted_text += parsedLine.response;
               }
+              lastResponse = parsedLine.response; // Update the last response
+              setFormattedTranscript(formatted_text);
+              // Update the state at the end of processing
             }
           }
+          setIsLoading(false);
+          setIsLoadingTranscript(false);
         }
+
+        // Update the loading state
       }
-      setSummaryText(summary);
     } catch (error) {
       console.error("Error:", error);
+      setIsLoadingSummary(false); // Update the loading state in case of error
     }
 
-    try {
-      const response = await fetch(
-        "https://singhealth-openai-03.openai.azure.com/openai/deployments/chat4/chat/completions?api-version=2024-02-15-preview",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "api-key": "f50c2f94adc443178fb2ddf07dd048ea",
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                role: "system",
-                content:
-                  "You will be provided with a transcript of a conversation between a doctor and a patient in either of English, Mandarin, Indonesian or Tamil language. You need to reformat the transcript in English in a way that it is easy to read and understand. Please ensure to do proper tagging as Doctor, Patient. You can use any format provided in Sample Transcript below. Do not add any additional information to the transcript. Please replace encrypted text values with revelant masked values eg [Patient' Name] , [Patient's Email] , etc as applicable.  \n\nSample Transcript:\nDoctor: Hello, how are you?\nPatient: I am fine, thank you.\nDoctor: What brings you here today?\nPatient: I have a headache.\nDoctor: How long have you had it?\nPatient: For about a week.",
-              },
-              {
-                role: "assistant",
-                content: encryptedText,
-              },
-            ],
-            temperature: 0.2,
-            top_p: 1,
-            max_tokens: 2500,
-            stream: false,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const result = await response.json();
-      setFormattedTranscript(result.choices[0].message.content);
-      setIsLoadingTranscript(false);
-    } catch (error) {
-      console.error("Error:", error);
-    }
-    setFormattedText(formattedTranscript);
     setIsLoading(false);
   };
 
@@ -707,67 +841,83 @@ const UserRecording: React.FC = () => {
   return (
     <>
       {!isAuthenticated ? (
-        <VStack
-          spacing={2}
-          p={4}
-          style={{
-            minHeight: "100vh",
-            background: `url(${shsbackground}) no-repeat center center fixed`, // Set background image here
-            backgroundColor: "#FDFCFA",
-            backgroundSize: "contain", // Ensure it covers the whole page
-            width: "100vw", // Ensure it spans the full width
-          }}
-        >
-          <Box
-            display="flex"
-            flexDirection="column"
-            alignItems="center"
-            justifyContent="center"
-            textAlign="center"
-            height="100vh"
-            width="100vw"
-            // bgImage={`url(${shsbackground})`}
-            // bgPosition="center"
-            // bgRepeat="no-repeat"
-            // bgSize="cover"
-          >
-            <Box
-              backgroundColor="rgba(255, 255, 255, 0.6)" // Semi-transparent white background
-              p={8}
-              borderRadius="md"
-              boxShadow="lg"
-            >
-              <Text
-                fontSize="2xl"
-                fontWeight="bold"
-                color="black"
-                align="center"
-                mb={4}
+        <>
+          <Flex height={"100vh"}>
+            <Box w="50%">
+              <Flex
+                flexDirection={"column"}
+                paddingX={"25%"}
+                paddingY={"20%"}
+                gap={8}
               >
-                Login to NoteBuddy
-              </Text>
-              <Input
-                placeholder="User ID"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                mb={4}
-              />
-              <Input
-                placeholder="Password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                mb={6}
-              />
-              <Button colorScheme="orange" onClick={handleLogin} width="full">
-                Login
-              </Button>
-              <Text fontSize="sm" mt={4}>
-                Note: Send email to oia@singhealth.com.sg for access
-              </Text>
+                <Image src={logo} alt="logo" width={"96px"} />
+                <Heading as="h1" size="3xl" color={"#DD6B20"}>
+                  NoteBuddy
+                </Heading>
+
+                <Text color={"#717171"}>
+                  Ambient digital scrive solution to converts Clinician-Patient
+                  conversation to text, extracts relevant information, and
+                  summarize s them to medical note.
+                </Text>
+
+                <VStack>
+                  <FormControl>
+                    <FormLabel>Email</FormLabel>
+                    <Input
+                      type="email"
+                      value={userId}
+                      onChange={(e: any) => setUserId(e.target.value)}
+                    />
+                  </FormControl>
+
+                  <FormControl>
+                    <FormLabel>Password</FormLabel>
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={(e: any) => setPassword(e.target.value)}
+                    />
+                  </FormControl>
+                </VStack>
+
+                <Button colorScheme="orange" onClick={handleLogin} width="full">
+                  Sign In
+                </Button>
+              </Flex>
             </Box>
-          </Box>
-        </VStack>
+            <Center w="50%" backgroundColor={"#FFF3EB"}>
+              <Image src={kanan} alt="Image logo of notebuddy" />
+            </Center>
+          </Flex>
+          {showConsentModal && (
+            <Modal
+              isOpen={showConsentModal}
+              size={"4xl"}
+              onClose={onCloseConsentModal}
+              isCentered={true}
+            >
+              <ModalOverlay />
+              <ModalContent paddingY={"20px"}>
+                <ModalHeader color={"#DD6B20"} fontWeight="bold">
+                  Consent to Continue
+                </ModalHeader>
+                {/*<ModalCloseButton/>*/}
+                <ModalBody>
+                  <Checkbox
+                    size="lg"
+                    colorScheme="orange"
+                    onChange={handleUserConsent}
+                  >
+                    The patient consented to be part of the pilot test for a
+                    Generative AI powered assistive tool for clinical
+                    documentation.
+                  </Checkbox>
+                </ModalBody>
+              </ModalContent>
+            </Modal>
+          )}
+        </>
       ) : (
         <>
           {/* User consent form after login */}

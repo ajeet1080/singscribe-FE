@@ -181,10 +181,7 @@ const UserRecording: React.FC = () => {
     return false;
   };
   const handleUserConsent = () => {
-    // setUserConsent(!userConsent);
-
-    setIsAuthenticated(true);
-    setUserConsent(true);
+    setUserConsent(!userConsent);
   };
 
   const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -250,8 +247,7 @@ const UserRecording: React.FC = () => {
       if (items.length > 0) {
         const user = items[0];
         if (user.password === password) {
-          // setIsAuthenticated(true);
-          setShowConsentModal(true);
+          setIsAuthenticated(true);
         } else {
           toast({
             title: "Login failed",
@@ -413,83 +409,37 @@ const UserRecording: React.FC = () => {
     }
   };
 
-  // Your toBase64 function
-  function toBase64(input: string) {
-    const bytes = new TextEncoder().encode(input);
-    let binString = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binString += String.fromCodePoint(bytes[i]);
-    }
-    return btoa(binString);
-  }
-
   const regererateSummary = async () => {
     setSummary("");
     setIsLoadingSummary(true);
     setSummaryText("");
-    // get jwt token by calling get api https://tandem01.azurewebsites.net/api/gettoken . Output json has feild called token
-    async function getJwtToken() {
-      try {
-        const response = await fetch(
-          "https://tandem01.azurewebsites.net/api/gettoken",
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-        return result.token;
-      } catch (error) {
-        console.error("Error:", error);
-      }
-    }
-
-    const message =
-      prompt +
-      "\n*********************************************\n Refer below actual transcript:\n\n" +
-      encryptedTranscript;
-
-    const encodedMessage = toBase64(message);
-
     try {
-      const jwt = await getJwtToken();
-      const response = await fetch("https://nprd-synapxechat.com/TandemApi", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          APIKey: "5eb165be933e4eb18b8882d40857266c",
-          Authorization: `Bearer ${jwt}`,
-          user: "sia.chen.han@synapxe.sg",
-          Timestamp:
-            new Date()
-              .toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-              })
-              .replace(/\//g, "-") +
-            " " +
-            new Date().toLocaleTimeString("en-US", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-              hour12: false,
-            }),
-        },
-        body: JSON.stringify({
-          userId: "notebudy@singhealth.com.sg",
-          func_bypass: "",
-          message: encodedMessage,
-          chat_model: "gpt4",
-        }),
-      });
+      const response = await fetch(
+        "https://singhealth-openai-03.openai.azure.com/openai/deployments/chat4/chat/completions?api-version=2024-02-15-preview",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": "f50c2f94adc443178fb2ddf07dd048ea",
+          },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: "system",
+                content: prompt,
+              },
+              {
+                role: "assistant",
+                content: encryptedTranscript,
+              },
+            ],
+            temperature: 0.2,
+            top_p: 1,
+            max_tokens: 1000,
+            stream: true,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -498,11 +448,9 @@ const UserRecording: React.FC = () => {
       if (response.body) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        let summary = ""; // Define summary here
-        let lastResponse = ""; // Keep track of the last response
-
         while (true) {
-          const { done, value } = await reader.read();
+          const chunk = await reader.read();
+          const { done, value } = chunk;
           if (done) {
             break;
           }
@@ -521,30 +469,30 @@ const UserRecording: React.FC = () => {
               }
             })
             .map((line) => JSON.parse(line.replace(/^data: /, "")));
-          setIsLoadingSummary(false); // Update the loading state
-
           for (const parsedLine of parsedLines) {
-            if (parsedLine.response && parsedLine.response !== lastResponse) {
-              await new Promise((resolve) => setTimeout(resolve, 100));
-              if (parsedLine.response.startsWith(lastResponse)) {
-                // If the new response is a continuation of the last response, only append the new part
-                summary += parsedLine.response.slice(lastResponse.length);
-              } else {
-                summary += parsedLine.response;
+            const { choices } = parsedLine;
+
+            if (choices && choices.length > 0) {
+              const { delta } = choices[0];
+
+              if (delta) {
+                // wait for 1 second
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                setSummary((currentSummary) =>
+                  currentSummary
+                    ? `${currentSummary}${delta.content}`
+                    : delta.content
+                );
+                setIsLoadingSummary(false);
+                setIsRatingOpen(true);
               }
-              lastResponse = parsedLine.response; // Update the last response
-              setSummaryText(summary);
-              setSummary(summary); // Update the state at the end of processing
             }
           }
-          setIsLoadingSummary(false);
         }
-
-        // Update the loading state
       }
+      setSummaryText(summary);
     } catch (error) {
       console.error("Error:", error);
-      setIsLoadingSummary(false); // Update the loading state in case of error
     }
   };
 
@@ -556,168 +504,60 @@ const UserRecording: React.FC = () => {
     setIsLoading(true);
 
     let encryptedText = transcript;
+    let detected_pii = [];
 
     setEncryptedTranscript(encryptedText);
 
-    async function getJwtToken() {
-      try {
-        const response = await fetch(
-          "https://tandem01.azurewebsites.net/api/gettoken",
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-        return result.token;
-      } catch (error) {
-        console.error("Error:", error);
-      }
-    }
-
-    async function callTandemApi() {
-      const message =
-        prompt +
-        "\n*********************************************\n Refer below actual transcript:\n\n" +
-        encryptedText;
-
-      const encodedMessage = toBase64(message);
-      try {
-        const jwt = await getJwtToken();
-        const response = await fetch("https://nprd-synapxechat.com/TandemApi", {
+    try {
+      const encrypt_response = await fetch(
+        "https://tandem01.azurewebsites.net/api/encrypt",
+        {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            APIKey: "5eb165be933e4eb18b8882d40857266c",
-            Authorization: `Bearer ${jwt}`,
-            user: "sia.chen.han@synapxe.sg",
-            Timestamp:
-              new Date()
-                .toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "2-digit",
-                  day: "2-digit",
-                })
-                .replace(/\//g, "-") +
-              " " +
-              new Date().toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: false,
-              }),
           },
           body: JSON.stringify({
-            userId: "notebudy@singhealth.com.sg",
-            func_bypass: "",
-            message: encodedMessage,
-            chat_model: "gpt4",
+            transcript: transcript,
           }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
         }
-
-        if (response.body) {
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder("utf-8");
-          let summary = ""; // Define summary here
-          let lastResponse = ""; // Keep track of the last response
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              break;
-            }
-            const decodedChunk = decoder.decode(value);
-            const lines = decodedChunk.split("\n");
-            const nonEmptyLines = lines.filter(
-              (line) => line !== "" && line !== "[DONE]"
-            );
-            const parsedLines = nonEmptyLines
-              .filter((line) => {
-                try {
-                  JSON.parse(line.replace(/^data: /, ""));
-                  return true;
-                } catch {
-                  return false;
-                }
-              })
-              .map((line) => JSON.parse(line.replace(/^data: /, "")));
-            setIsLoadingSummary(false); // Update the loading state
-
-            for (const parsedLine of parsedLines) {
-              if (parsedLine.response && parsedLine.response !== lastResponse) {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-                if (parsedLine.response.startsWith(lastResponse)) {
-                  // If the new response is a continuation of the last response, only append the new part
-                  summary += parsedLine.response.slice(lastResponse.length);
-                } else {
-                  summary += parsedLine.response;
-                }
-                lastResponse = parsedLine.response; // Update the last response
-                setSummaryText(summary);
-                setSummary(summary); // Update the state at the end of processing
-              }
-            }
-            setIsLoadingSummary(false);
-          }
-
-          // Update the loading state
-        }
-      } catch (error) {
-        console.error("Error:", error);
-        setIsLoadingSummary(false); // Update the loading state in case of error
+      );
+      if (!encrypt_response.ok) {
+        throw new Error(`HTTP error! status: ${encrypt_response.status}`);
       }
+      const encrypt_result = await encrypt_response.json();
+      encryptedText = encrypt_result.encrypted_transcript;
+      detected_pii = encrypt_result.identified_pii;
+    } catch (error) {
+      console.error("Error:", error);
     }
 
-    callTandemApi();
     try {
-      const jwt = await getJwtToken();
-      const message =
-        "You will be provided with a transcript of a conversation between a doctor and a patient in either of English, Mandarin, Indonesian or Tamil language. You need to reformat the transcript in English in a way that it is easy to read and understand. Please ensure to do proper tagging as Doctor, Patient. You can use any format provided in Sample Transcript below. Do not add any additional information to the transcript. Please replace encrypted text values with revelant masked values eg [Patient' Name] , [Patient's Email] , etc as applicable.  \n\nSample Transcript:\nDoctor: Hello, how are you?\nPatient: I am fine, thank you.\nDoctor: What brings you here today?\nPatient: I have a headache.\nDoctor: How long have you had it?\nPatient: For about a week." +
-        "\n*********************************************\n Refer below actual transcript:\n\n" +
-        encryptedText;
-
-      const encodedMessage = toBase64(message);
-      const response = await fetch("https://nprd-synapxechat.com/TandemApi", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          APIKey: "5eb165be933e4eb18b8882d40857266c",
-          Authorization: `Bearer ${jwt}`,
-          user: "sia.chen.han@synapxe.sg",
-          Timestamp:
-            new Date()
-              .toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-              })
-              .replace(/\//g, "-") +
-            " " +
-            new Date().toLocaleTimeString("en-US", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-              hour12: false,
-            }),
-        },
-        body: JSON.stringify({
-          userId: "notebudy@singhealth.com.sg",
-          func_bypass: "",
-          message: encodedMessage,
-          chat_model: "gpt4",
-        }),
-      });
+      const response = await fetch(
+        "https://singhealth-openai-03.openai.azure.com/openai/deployments/chat4/chat/completions?api-version=2024-02-15-preview",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": "f50c2f94adc443178fb2ddf07dd048ea",
+          },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: "system",
+                content: prompt,
+              },
+              {
+                role: "assistant",
+                content: encryptedText,
+              },
+            ],
+            temperature: 0.2,
+            top_p: 1,
+            max_tokens: 1000,
+            stream: true,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -726,11 +566,9 @@ const UserRecording: React.FC = () => {
       if (response.body) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        let formatted_text = ""; // Define summary here
-        let lastResponse = ""; // Keep track of the last response
-
         while (true) {
-          const { done, value } = await reader.read();
+          const chunk = await reader.read();
+          const { done, value } = chunk;
           if (done) {
             break;
           }
@@ -749,36 +587,70 @@ const UserRecording: React.FC = () => {
               }
             })
             .map((line) => JSON.parse(line.replace(/^data: /, "")));
-          setIsLoading(false); // Update the loading state
-          setIsLoadingTranscript(false);
-
           for (const parsedLine of parsedLines) {
-            if (parsedLine.response && parsedLine.response !== lastResponse) {
-              await new Promise((resolve) => setTimeout(resolve, 75));
-              if (parsedLine.response.startsWith(lastResponse)) {
-                // If the new response is a continuation of the last response, only append the new part
-                formatted_text += parsedLine.response.slice(
-                  lastResponse.length
+            const { choices } = parsedLine;
+
+            if (choices && choices.length > 0) {
+              const { delta } = choices[0];
+
+              if (delta) {
+                // wait for 1 second
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                setSummary((currentSummary) =>
+                  currentSummary
+                    ? `${currentSummary}${delta.content}`
+                    : delta.content
                 );
-              } else {
-                formatted_text += parsedLine.response;
+                setIsLoadingSummary(false);
               }
-              lastResponse = parsedLine.response; // Update the last response
-              setFormattedTranscript(formatted_text);
-              // Update the state at the end of processing
             }
           }
-          setIsLoading(false);
-          setIsLoadingTranscript(false);
         }
-
-        // Update the loading state
       }
+      setSummaryText(summary);
     } catch (error) {
       console.error("Error:", error);
-      setIsLoadingSummary(false); // Update the loading state in case of error
     }
 
+    try {
+      const response = await fetch(
+        "https://singhealth-openai-03.openai.azure.com/openai/deployments/chat4/chat/completions?api-version=2024-02-15-preview",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": "f50c2f94adc443178fb2ddf07dd048ea",
+          },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You will be provided with a transcript of a conversation between a doctor and a patient in either of English, Mandarin, Indonesian or Tamil language. You need to reformat the transcript in English in a way that it is easy to read and understand. Please ensure to do proper tagging as Doctor, Patient. You can use any format provided in Sample Transcript below. Do not add any additional information to the transcript. Please replace encrypted text values with revelant masked values eg [Patient' Name] , [Patient's Email] , etc as applicable.  \n\nSample Transcript:\nDoctor: Hello, how are you?\nPatient: I am fine, thank you.\nDoctor: What brings you here today?\nPatient: I have a headache.\nDoctor: How long have you had it?\nPatient: For about a week.",
+              },
+              {
+                role: "assistant",
+                content: encryptedText,
+              },
+            ],
+            temperature: 0.2,
+            top_p: 1,
+            max_tokens: 2500,
+            stream: false,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const result = await response.json();
+      setFormattedTranscript(result.choices[0].message.content);
+      setIsLoadingTranscript(false);
+    } catch (error) {
+      console.error("Error:", error);
+    }
+    setFormattedText(formattedTranscript);
     setIsLoading(false);
   };
 
