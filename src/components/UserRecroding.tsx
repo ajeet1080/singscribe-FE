@@ -146,6 +146,9 @@ const UserRecording: React.FC = () => {
 
   const onCloseConsentModal = () => setShowConsentModal(false);
 
+  const [data, setData] = useState<any | null>(null);
+  const [updatedSummary, setUpdatedSummary] = useState<string>("");
+
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setPrompt(e.target.value);
   };
@@ -209,6 +212,13 @@ const UserRecording: React.FC = () => {
     setTimer(0);
     setUCode("");
   };
+
+  const endpoint = "https://singscribe-cosmosdb.documents.azure.com:443/";
+  const key =
+    "SjcL1sPNRelpz9IyBzXL1Aww9smwQALhmPxGikKauJ8H0C1CzXQU3SZ09Scfyg85CxQcPrWNAmS8ACDb2jcm4Q==";
+  const databaseId = "notebuddy";
+  const containerId = "summaries";
+  const cosmosClient = new CosmosClient({ endpoint, key });
 
   const handleLogin = async () => {
     try {
@@ -384,6 +394,7 @@ const UserRecording: React.FC = () => {
     setIsLoadingTranscript(true);
     await transcribeAudio();
     setGenerateLoading(true);
+    handleGenerate();
   };
 
   const handleGenerate = async () => {
@@ -706,9 +717,103 @@ const UserRecording: React.FC = () => {
     return summary.replace(/\n/g, "<br>");
   };
 
-  function retrieveFromCosmosDB(uniqueCode: string): void {
-    throw new Error("Function not implemented.");
-  }
+  const retrieveFromCosmosDB = async (uniqueCode: string) => {
+    setSummary("");
+    setFormattedTranscript("");
+    setFormattedText("");
+    setData(null);
+
+    try {
+      const { database } = await cosmosClient.databases.createIfNotExists({
+        id: databaseId,
+      });
+      const { container } = await database.containers.createIfNotExists({
+        id: containerId,
+      });
+      const querySpec = {
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [
+          {
+            name: "@id",
+            value: uniqueCode,
+          },
+        ],
+      };
+      const { resources } = await container.items.query(querySpec).fetchAll();
+      if (resources && resources.length > 0) {
+        setData(resources[0]);
+        setSummary(resources[0].summary);
+        setFormattedText(resources[0].transcript);
+        setFormattedTranscript(resources[0].transcript);
+      } else {
+        toast({
+          title: "Data not found",
+          description: "No data found with the provided ID.",
+          status: "warning",
+          duration: 3000,
+          isClosable: true,
+        });
+        setData(null);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An error occurred while retrieving data.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      console.error("Error retrieving data from Cosmos DB", error);
+    }
+  };
+
+  const updateSummaryInCosmosDB = async () => {
+    if (!data || !summary) {
+      toast({
+        title: "Error",
+        description: "No data or updated summary to save.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+
+      return;
+    }
+
+    try {
+      const { database } = await cosmosClient.databases.createIfNotExists({
+        id: databaseId,
+      });
+      const { container } = await database.containers.createIfNotExists({
+        id: containerId,
+      });
+      const item = {
+        id: data.id,
+        ...data,
+        updatedSummary: summary, // Update the summary field
+      };
+      const { resource } = await container.item(data.id).replace(item);
+
+      toast({
+        title: "Success",
+        description: "Summary updated successfully in Cosmos DB.",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+      setIsEditing(false); // Exit editing mode
+      setUpdatedSummary(summary); // Update local state
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An error occurred while updating the summary.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      console.error("Error updating summary in Cosmos DB", error);
+    }
+  };
 
   return (
     <>
@@ -829,83 +934,190 @@ const UserRecording: React.FC = () => {
               </Box>
             </VStack>
           )}
-          {userConsent && (
-            <>
-              <Container centerContent maxW="container.xl">
-                <Flex minWidth="100%" marginY={"6"} alignItems="center" gap="2">
-                  <Box>
-                    <Heading size="md">
-                      <Image src={logo} alt="logo" />
+          <Box backgroundColor="gray.100">
+            {userConsent && (
+              <>
+                <Container centerContent maxW="container.xl">
+                  <Flex
+                    minWidth="100%"
+                    marginY={"6"}
+                    alignItems="center"
+                    gap="2"
+                  >
+                    <Box>
+                      <Heading size="md">
+                        <Image src={logo} alt="logo" />
+                      </Heading>
+                    </Box>
+                    <Spacer />
+
+                    <Heading as="h1" size="xl" mb="0" color={"gray.500"}>
+                      NoteBuddy
                     </Heading>
-                  </Box>
 
-                  <Spacer />
+                    <Spacer />
 
-                  <ButtonGroup gap="5">
-                    <Button
-                      colorScheme="black"
-                      variant="link"
-                      _hover={{ color: "#DD6B20" }}
-                      onClick={() => setShowPromptModal(true)}
-                    >
-                      PROMPT SETTING
-                    </Button>
+                    <ButtonGroup gap="5">
+                      <Button
+                        colorScheme="black"
+                        variant="link"
+                        _hover={{ color: "#DD6B20" }}
+                        onClick={() => setShowPromptModal(true)}
+                        color={"gray.500"}
+                      >
+                        PROMPT SETTING
+                      </Button>
 
-                    <Button
-                      colorScheme="black"
-                      variant="link"
-                      _hover={{ color: "#DD6B20" }}
-                      onClick={handleClearAll}
-                    >
-                      NEW SESSION
-                    </Button>
+                      <Button
+                        colorScheme="black"
+                        variant="link"
+                        _hover={{ color: "#DD6B20" }}
+                        onClick={handleClearAll}
+                        color={"gray.500"}
+                      >
+                        NEW SESSION
+                      </Button>
 
-                    <Button
-                      colorScheme="black"
-                      variant="link"
-                      _hover={{ color: "#DD6B20" }}
-                      onClick={() => setShowVersionModal(true)}
-                    >
-                      VERSION HISTORY
-                    </Button>
+                      <Button
+                        colorScheme="black"
+                        variant="link"
+                        _hover={{ color: "#DD6B20" }}
+                        onClick={() => setShowVersionModal(true)}
+                        color={"gray.500"}
+                      >
+                        VERSION HISTORY
+                      </Button>
 
-                    <Button
-                      colorScheme="black"
-                      variant="link"
-                      _hover={{ color: "#DD6B20" }}
-                    >
-                      ACCOUNT
-                    </Button>
-                  </ButtonGroup>
-                </Flex>
+                      <Button
+                        colorScheme="black"
+                        variant="link"
+                        _hover={{ color: "#DD6B20" }}
+                        color={"gray.500"}
+                      >
+                        ACCOUNT
+                      </Button>
+                    </ButtonGroup>
+                  </Flex>
 
-                {/* 
-                
-                  <Modal isOpen={isOpen} onClose={onClose}>
-                    <ModalOverlay />
-                    <ModalContent>
-                      <ModalHeader>Select a language</ModalHeader>
-                      <ModalCloseButton />
-                      <ModalBody>
-                        <RadioGroup
-                          onChange={handleLanguageChange}
-                          value={language}
-                        >
-                          <Stack direction="column">
-                            <Radio value="en-SG">English</Radio>
-                            <Radio value="zh-CN">Mandarin</Radio>
-                            <Radio value="id-ID">Malay</Radio>
-                            <Radio value="ta-IN">Tamil</Radio>
-                          </Stack>
-                        </RadioGroup>
-                      </ModalBody>
-                      <ModalFooter>
-                        <Button colorScheme="blue" mr={3} onClick={onClose}>
-                          Close
-                        </Button>
-                      </ModalFooter>
-                    </ModalContent>
-                  </Modal>
+                  <Card width={"100%"} borderRadius="md">
+                    <CardBody>
+                      <Flex minWidth="max-content" alignItems={"end"} gap="3">
+                        <Flex width={"60%"} gap="3">
+                          <FormControl>
+                            <FormLabel>Select Specialty</FormLabel>
+                            <Select
+                              placeholder="Select speciality"
+                              onChange={handleChange}
+                            >
+                              <option value="END">END</option>
+                              <option value="URO">Urology</option>
+                              <option value="GEN">General</option>
+                            </Select>
+                          </FormControl>
+
+                          <FormControl>
+                            <FormLabel>Select Language</FormLabel>
+                            <Select
+                              placeholder="Select Language"
+                              onChange={(e) =>
+                                handleLanguageChange(e.target.value)
+                              }
+                            >
+                              <option value="en-SG">English</option>
+                              <option value="zh-CN">Mandarin</option>
+                              <option value="id-ID">Malay</option>
+                              <option value="ta-IN">Tamil</option>
+                            </Select>
+                          </FormControl>
+                          <FormControl>
+                            <FormLabel>
+                              Code{" "}
+                              <Tooltip
+                                label="Use below code to retrieve transcript and summary later from https://notebuddy-nonprd02.azurewebsites.net/. Use same credentials to login the url."
+                                fontSize="sm"
+                                background={"white"}
+                                color={"black"}
+                              >
+                                <span>
+                                  <Icon
+                                    boxSize={5}
+                                    ml={2}
+                                    as={InfoOutlineIcon}
+                                  />
+                                </span>
+                              </Tooltip>
+                            </FormLabel>
+                            <Input
+                              placeholder="00"
+                              value={uCode}
+                              style={{
+                                width: "30%",
+                                color: "red",
+                                fontWeight: "bold",
+                                fontSize: "18px",
+                              }}
+                              disabled={true}
+                            />
+                          </FormControl>
+                        </Flex>
+
+                        <Spacer />
+
+                        <Flex alignItems={"end"} gap={"3"}>
+                          <Text
+                            fontSize={18}
+                            fontWeight="bold"
+                            color="gray"
+                            alignSelf={"center"}
+                            display="flex"
+                            gap={"1"}
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              width="18"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
+                              <g
+                                id="SVGRepo_tracerCarrier"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              ></g>
+                              <g id="SVGRepo_iconCarrier">
+                                <path
+                                  d="M4.51555 7C3.55827 8.4301 3 10.1499 3 12C3 16.9706 7.02944 21 12 21C16.9706 21 21 16.9706 21 12C21 7.02944 16.9706 3 12 3V6M12 12L8 8"
+                                  stroke="#717171"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                ></path>
+                              </g>
+                            </svg>
+                            {recording
+                              ? `${String(Math.floor(timer / 3600)).padStart(
+                                  2,
+                                  "0"
+                                )}:${String(
+                                  Math.floor((timer % 3600) / 60)
+                                ).padStart(2, "0")}:${String(
+                                  timer % 60
+                                ).padStart(2, "0")}`
+                              : "00:00:00"}
+                          </Text>
+
+                          <Button
+                            colorScheme={recording ? "red" : "orange"}
+                            variant={"outline"}
+                            onClick={toggleRecording}
+                            marginTop={0}
+                          >
+                            {recording ? "Stop Recording" : "Start Recording"}
+                          </Button>
+                        </Flex>
+                      </Flex>
+                    </CardBody>
+                  </Card>
 
                   <Box
                     w="full"
@@ -914,160 +1126,97 @@ const UserRecording: React.FC = () => {
                     justifyContent="center"
                     flexDirection="column"
                     alignItems="center"
-                    mt={120}
-                  >
-                    <Select
-                      placeholder="Select speciality"
-                      value={selectedSpeciality}
-                      onChange={handleChange}
-                      w={{ base: "1000%", md: "20%" }}
-                      mb={4}
-                    >
-                      <option value="END">END</option>
-                      <option value="URO">Urology</option>
-                      <option value="GEN">General</option>
-                    </Select>
+                  ></Box>
 
-                    <Button onClick={togglePrompt}>
-                      {showPrompt ? "Collapse Prompt" : "Expand Prompt"}
-                    </Button>
-
-                    <Collapse in={showPrompt}>
-                      {prompt && (
-                        <Textarea
-                          mt={4}
-                          w="80vw"
-                          placeholder="Enter your prompt here..."
-                          value={prompt}
-                          onChange={(e) => setPrompt(e.target.value)}
-                          size="sm"
-                          resize="vertical"
-                          borderRadius="md"
-                          height={500}
-                          p={2}
-                        />
-                      )}
-                    </Collapse>
-                  </Box>
-
-                  <HStack spacing={4} width="100%" justifyContent="center">
-                    <Button
-                      colorScheme={isGenerateLoading ? "blue" : "white"}
-                      onClick={regererateSummary}
-                      marginTop={0}
-                    >
-                      {isGenerateLoading ? "Regenerate" : ""}
-                    </Button>
-                    <Button
-                      colorScheme={recording ? "blue" : "orange"}
-                      onClick={toggleRecording}
-                      marginTop={0}
-                    >
-                      {recording ? "Stop Recording" : "Start Recording"}
-                    </Button>
-
-                    <Button
-                      colorScheme={isGenerateLoading ? "green" : "white"}
-                      onClick={handleGenerate}
-                      marginTop={0}
-                    >
-                      {isGenerateLoading ? "Get code" : ""}
-                    </Button>
-
-                    <Button
-                      colorScheme={isGenerateLoading ? "red" : "white"}
-                      onClick={handleClearAll}
-                      marginTop={0}
-                    >
-                      {isGenerateLoading ? "Clear" : ""}
-                    </Button>
-                  </HStack>
-
-                  <Text fontSize="3xl" fontWeight="bold" color="blackAlpha.700">
-                    {uCode}
-                  </Text>
-
-                  {recording && (
-                    <>
-                      <img
-                        src={soundwave}
-                        alt="Soundwave"
-                        width="100"
-                        height="100"
-                      />
-                      <Text fontSize={25} fontWeight={"bold"} color={"orange"}>
-                        {Math.floor(timer / 3600)
-                          .toString()
-                          .padStart(2, "0")}
-                        :
-                        {Math.floor((timer % 3600) / 60)
-                          .toString()
-                          .padStart(2, "0")}
-                        :{(timer % 60).toString().padStart(2, "0")}
-                      </Text>
-                    </>
-                  )}
-
-                  <HStack spacing={4} width="100%">
-                    <Tabs
-                      flex="1"
-                      width="100%"
-                      height={600}
-                      p={3}
-                      borderRadius="md"
-                      boxShadow="lg"
-                      bg="white"
-                    >
-                      <Text fontSize="2xl" fontWeight="bold" color="#E54809">
-                        Transcript
-                      </Text>
-                      <TabList>
-                        <Tab
-                          _selected={{ color: "#E54809", borderColor: "#E54809" }}
-                        >
-                          Raw Transcript
-                        </Tab>
-                        <Tab
-                          _selected={{ color: "#E54809", borderColor: "#E54809" }}
-                        >
-                          Formatted Transcript
-                        </Tab>
-                      </TabList>
-                      <TabPanels>
-                        <TabPanel
-                          ref={rawTranscriptRef}
-                          width="100%"
-                          height={475}
-                          p={3}
-                          borderRadius="md"
-                          overflow="auto"
-                        >
-                          {transcription.map((t, index) => (
-                            <p
-                              key={index}
-                              style={{
-                                color: t.speakerId === "Guest-1" ? "blue" : "red",
-                              }}
+                  <HStack spacing={4} width="100%" alignItems="start">
+                    <Card width={"50%"} height={"600px"}>
+                      <CardBody>
+                        <HStack mb={6} mt={3}>
+                          <Flex gap={4}>
+                            <svg
+                              viewBox="0 0 24 24"
+                              width={18}
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
                             >
-                              {t.speakerId} : {t.text}
-                            </p>
-                          ))}
-                        </TabPanel>
-                        <TabPanel
-                          width="100%"
-                          height={475}
-                          p={3}
-                          borderRadius="md"
-                          overflow="auto"
-                        >
-                          {isLoadingTranscript ? (
-                            <Spinner
-                              label="Formating transcript, please wait..."
-                              size="xl"
-                              color="#E54809"
-                            />
-                          ) : (
-                            formattedTranscript
+                              <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
+                              <g
+                                id="SVGRepo_tracerCarrier"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              ></g>
+                              <g id="SVGRepo_iconCarrier">
+                                <path
+                                  d="M7 10L12 15L17 10"
+                                  stroke="#000000"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                ></path>
+                              </g>
+                            </svg>
+
+                            <Menu>
+                              <MenuButton>{selectedTranscriptTab}</MenuButton>
+                              <MenuList>
+                                <MenuItem
+                                  as="button"
+                                  onClick={() =>
+                                    setSelectedTranscriptTab("Raw Transcript")
+                                  }
+                                >
+                                  Raw Transcript
+                                </MenuItem>
+                                <MenuItem
+                                  as="button"
+                                  onClick={() =>
+                                    setSelectedTranscriptTab(
+                                      "Formatted Transcript"
+                                    )
+                                  }
+                                >
+                                  Formatted Transcript
+                                </MenuItem>
+                              </MenuList>
+                            </Menu>
+                          </Flex>
+                        </HStack>
+
+                        {selectedTranscriptTab === "Raw Transcript" ? (
+                          <Box
+                            width="100%"
+                            height={475}
+                            p={3}
+                            borderRadius="md"
+                            overflow="auto"
+                          >
+                            {transcription.map((t, index) => (
+                              <p
+                                key={index}
+                                style={{
+                                  color:
+                                    t.speakerId === "Guest-1" ? "blue" : "red",
+                                }}
+                              >
+                                {t.speakerId} : {t.text}
+                              </p>
+                            ))}
+                          </Box>
+                        ) : isLoadingTranscript ? (
+                          <Spinner
+                            label="Formating transcript, please wait..."
+                            size="xl"
+                            color="#E54809"
+                          />
+                        ) : (
+                          <Box
+                            width="100%"
+                            height={475}
+                            p={3}
+                            borderRadius="md"
+                            overflow="auto"
+                          >
+                            {formattedTranscript
                               .split("\n")
                               .filter((line) => line.trim() !== ":")
                               .map((line, index) => {
@@ -1083,616 +1232,390 @@ const UserRecording: React.FC = () => {
                                     {speaker} : {text}
                                   </p>
                                 );
-                              })
-                          )}
-                        </TabPanel>
-                      </TabPanels>
-                    </Tabs>
-                    <Box
-                      ref={summaryRef}
-                      flex="1"
-                      width="100%"
-                      height={600}
-                      p={3}
-                      borderRadius="md"
-                      boxShadow="lg"
-                      bg="white"
-                    >
-                      <Text fontSize="2xl" fontWeight="bold" color="#E54809">
-                        Summary
-                      </Text>
-                      {isEditing ? (
-                        <Button onClick={handleSave} m={2}>
+                              })}
+                          </Box>
+                        )}
+                      </CardBody>
+                    </Card>
+
+                    <Card width={"50%"} height={"600px"}>
+                      <CardBody>
+                        <HStack mb={6} mt={3}>
+                          <Heading
+                            as="h3"
+                            color={"#E54809"}
+                            fontSize="lg"
+                            fontWeight="bold"
+                          >
+                            Summary
+                          </Heading>
+                          <Spacer />
+
+                          <Flex gap={4}>
+                            {!isEditing ? (
+                              <>
+                                <Button
+                                  colorScheme="black"
+                                  variant="link"
+                                  _hover={{ color: "#DD6B20" }}
+                                  onClick={regererateSummary}
+                                >
+                                  <Flex gap={1}>
+                                    <svg
+                                      viewBox="0 0 16 16"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      fill="#000000"
+                                      width={14}
+                                    >
+                                      <g
+                                        id="SVGRepo_bgCarrier"
+                                        strokeWidth="0"
+                                      ></g>
+                                      <g
+                                        id="SVGRepo_tracerCarrier"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      ></g>
+                                      <g id="SVGRepo_iconCarrier">
+                                        <path
+                                          fill="#000000"
+                                          d="M14.9547098,7.98576084 L15.0711,7.99552 C15.6179,8.07328 15.9981,8.57957 15.9204,9.12636 C15.6826,10.7983 14.9218,12.3522 13.747,13.5654 C12.5721,14.7785 11.0435,15.5888 9.37999,15.8801 C7.7165,16.1714 6.00349,15.9288 4.48631,15.187 C3.77335,14.8385 3.12082,14.3881 2.5472,13.8537 L1.70711,14.6938 C1.07714,15.3238 3.55271368e-15,14.8776 3.55271368e-15,13.9867 L3.55271368e-15,9.99998 L3.98673,9.99998 C4.87763,9.99998 5.3238,11.0771 4.69383,11.7071 L3.9626,12.4383 C4.38006,12.8181 4.85153,13.1394 5.36475,13.3903 C6.50264,13.9466 7.78739,14.1285 9.03501,13.9101 C10.2826,13.6916 11.4291,13.0839 12.3102,12.174 C13.1914,11.2641 13.762,10.0988 13.9403,8.84476 C14.0181,8.29798 14.5244,7.91776 15.0711,7.99552 L14.9547098,7.98576084 Z M11.5137,0.812976 C12.2279,1.16215 12.8814,1.61349 13.4558,2.14905 L14.2929,1.31193 C14.9229,0.681961 16,1.12813 16,2.01904 L16,6.00001 L12.019,6.00001 C11.1281,6.00001 10.6819,4.92287 11.3119,4.29291 L12.0404,3.56441 C11.6222,3.18346 11.1497,2.86125 10.6353,2.60973 C9.49736,2.05342 8.21261,1.87146 6.96499,2.08994 C5.71737,2.30841 4.57089,2.91611 3.68976,3.82599 C2.80862,4.73586 2.23802,5.90125 2.05969,7.15524 C1.98193,7.70202 1.47564,8.08224 0.928858,8.00448 C0.382075,7.92672 0.00185585,7.42043 0.0796146,6.87364 C0.31739,5.20166 1.07818,3.64782 2.25303,2.43465 C3.42788,1.22148 4.95652,0.411217 6.62001,0.119916 C8.2835,-0.171384 9.99651,0.0712178 11.5137,0.812976 Z"
+                                        ></path>
+                                      </g>
+                                    </svg>
+                                    Regenerate
+                                  </Flex>
+                                </Button>
+
+                                <Button
+                                  colorScheme="black"
+                                  variant="link"
+                                  _hover={{ color: "#DD6B20" }}
+                                  onClick={handleCopy}
+                                >
+                                  <Flex gap={1}>
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      width={15}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                      <g
+                                        id="SVGRepo_bgCarrier"
+                                        strokeWidth="0"
+                                      ></g>
+                                      <g
+                                        id="SVGRepo_tracerCarrier"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      ></g>
+                                      <g id="SVGRepo_iconCarrier">
+                                        <path
+                                          fillRule="evenodd"
+                                          clipRule="evenodd"
+                                          d="M21 8C21 6.34315 19.6569 5 18 5H10C8.34315 5 7 6.34315 7 8V20C7 21.6569 8.34315 23 10 23H18C19.6569 23 21 21.6569 21 20V8ZM19 8C19 7.44772 18.5523 7 18 7H10C9.44772 7 9 7.44772 9 8V20C9 20.5523 9.44772 21 10 21H18C18.5523 21 19 20.5523 19 20V8Z"
+                                          fill="#0F0F0F"
+                                        ></path>
+                                        <path
+                                          d="M6 3H16C16.5523 3 17 2.55228 17 2C17 1.44772 16.5523 1 16 1H6C4.34315 1 3 2.34315 3 4V18C3 18.5523 3.44772 19 4 19C4.55228 19 5 18.5523 5 18V4C5 3.44772 5.44772 3 6 3Z"
+                                          fill="#0F0F0F"
+                                        ></path>
+                                      </g>
+                                    </svg>
+                                    Copy
+                                  </Flex>
+                                </Button>
+
+                                <Button
+                                  colorScheme="black"
+                                  variant="link"
+                                  _hover={{ color: "#DD6B20" }}
+                                  onClick={handleEdit}
+                                >
+                                  <Flex gap={1}>
+                                    <svg
+                                      fill="#000000"
+                                      viewBox="0 0 32 32"
+                                      version="1.1"
+                                      width="13"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                      <g
+                                        id="SVGRepo_bgCarrier"
+                                        strokeWidth="0"
+                                      ></g>
+                                      <g
+                                        id="SVGRepo_tracerCarrier"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      ></g>
+                                      <g id="SVGRepo_iconCarrier">
+                                        <path d="M30.133 1.552c-1.090-1.044-2.291-1.573-3.574-1.573-2.006 0-3.47 1.296-3.87 1.693-0.564 0.558-19.786 19.788-19.786 19.788-0.126 0.126-0.217 0.284-0.264 0.456-0.433 1.602-2.605 8.71-2.627 8.782-0.112 0.364-0.012 0.761 0.256 1.029 0.193 0.192 0.45 0.295 0.713 0.295 0.104 0 0.208-0.016 0.31-0.049 0.073-0.024 7.41-2.395 8.618-2.756 0.159-0.048 0.305-0.134 0.423-0.251 0.763-0.754 18.691-18.483 19.881-19.712 1.231-1.268 1.843-2.59 1.819-3.925-0.025-1.319-0.664-2.589-1.901-3.776zM22.37 4.87c0.509 0.123 1.711 0.527 2.938 1.765 1.24 1.251 1.575 2.681 1.638 3.007-3.932 3.912-12.983 12.867-16.551 16.396-0.329-0.767-0.862-1.692-1.719-2.555-1.046-1.054-2.111-1.649-2.932-1.984 3.531-3.532 12.753-12.757 16.625-16.628zM4.387 23.186c0.55 0.146 1.691 0.57 2.854 1.742 0.896 0.904 1.319 1.9 1.509 2.508-1.39 0.447-4.434 1.497-6.367 2.121 0.573-1.886 1.541-4.822 2.004-6.371zM28.763 7.824c-0.041 0.042-0.109 0.11-0.19 0.192-0.316-0.814-0.87-1.86-1.831-2.828-0.981-0.989-1.976-1.572-2.773-1.917 0.068-0.067 0.12-0.12 0.141-0.14 0.114-0.113 1.153-1.106 2.447-1.106 0.745 0 1.477 0.34 2.175 1.010 0.828 0.795 1.256 1.579 1.27 2.331 0.014 0.768-0.404 1.595-1.24 2.458z"></path>
+                                      </g>
+                                    </svg>
+                                    Edit
+                                  </Flex>
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  colorScheme="black"
+                                  variant="link"
+                                  _hover={{ color: "#DD6B20" }}
+                                  onClick={updateSummaryInCosmosDB}
+                                >
+                                  Save
+                                </Button>
+
+                                <Button
+                                  colorScheme="black"
+                                  variant="link"
+                                  _hover={{ color: "#DD6B20" }}
+                                  onClick={() => setIsEditing(false)}
+                                >
+                                  Cancel
+                                </Button>
+                              </>
+                            )}
+                          </Flex>
+                        </HStack>
+
+                        {isLoadingSummary ? (
+                          <Spinner size="xl" color="#E54809" />
+                        ) : isEditing ? (
+                          <Textarea
+                            width="100%"
+                            height={"100%"}
+                            p={3}
+                            value={summary}
+                            onChange={(e: any) => setSummary(e.target.value)}
+                            overflow={"auto"}
+                          />
+                        ) : (
+                          <Box
+                            width="100%"
+                            height={475}
+                            p={3}
+                            borderRadius="md"
+                            overflow="auto"
+                            dangerouslySetInnerHTML={{
+                              //Define summary before calling split
+                              __html: summary
+                                ? summary
+                                    .split("\n")
+                                    .map((line) => `<p>${line}</br></p>`)
+                                    .join("")
+                                : "",
+                            }}
+                          />
+                        )}
+                      </CardBody>
+                    </Card>
+                  </HStack>
+
+                  <Modal
+                    isOpen={showPromptModal}
+                    size={"4xl"}
+                    onClose={onClosePromptModal}
+                  >
+                    <ModalOverlay />
+                    <ModalContent>
+                      <ModalHeader>Prompt Setting</ModalHeader>
+                      <ModalCloseButton />
+                      <ModalBody>
+                        <Textarea
+                          mt={4}
+                          placeholder="Enter your prompt here..."
+                          value={prompt}
+                          onChange={(e: any) => setPrompt(e.target.value)}
+                          size="sm"
+                          resize="vertical"
+                          borderRadius="md"
+                          height={500}
+                          p={2}
+                        />
+
+                        <VStack></VStack>
+                      </ModalBody>
+
+                      <ModalFooter gap={4}>
+                        <Button variant="ghost" onClick={onClosePromptModal}>
+                          Cancel
+                        </Button>
+
+                        <Button
+                          colorScheme="orange"
+                          mr={3}
+                          onClick={onClosePromptModal}
+                        >
                           Save
                         </Button>
-                      ) : (
-                        <Button onClick={handleEdit} m={2}>
-                          Edit (with HTML)
-                        </Button>
-                      )}{" "}
-                      <Button onClick={handleCopy} m={2}>
-                        Copy
-                      </Button>
-                      {isLoadingSummary ? (
-                        <Spinner size="xl" color="#E54809" />
-                      ) : isEditing ? (
-                        <Textarea
-                          width="100%"
-                          height={475}
-                          p={3}
-                          borderRadius="md"
-                          value={summary}
-                          onChange={(e) => setSummary(e.target.value)}
-                          overflow={"auto"}
-                        />
-                      ) : (
-                        <Box
-                          width="100%"
-                          height={475}
-                          p={3}
-                          borderRadius="md"
-                          overflow="auto"
-                          dangerouslySetInnerHTML={{
-                            //Define summary before calling split
-                            __html: summary
-                              ? summary
-                                  .split("\n")
-                                  .map((line) => `<p>${line}</br></p>`)
-                                  .join("")
-                              : "",
-                          }}
-                        />
-                      )}
-                    </Box>
-                  </HStack>
-                
-                */}
+                      </ModalFooter>
+                    </ModalContent>
+                  </Modal>
 
-                {/* The new code start from here */}
-
-                <Card width={"100%"} borderRadius="md">
-                  <CardBody>
-                    <Flex minWidth="max-content" alignItems={"end"} gap="3">
-                      <Flex width={"60%"} gap="3">
+                  <Modal
+                    isOpen={showVersionModal}
+                    size={"md"}
+                    onClose={onCloseVersionModal}
+                  >
+                    <ModalOverlay />
+                    <ModalContent>
+                      <ModalHeader>Version History</ModalHeader>
+                      <ModalCloseButton />
+                      <ModalBody>
                         <FormControl>
-                          <FormLabel>Select Specialty</FormLabel>
-                          <Select
-                            placeholder="Select speciality"
-                            onChange={handleChange}
-                          >
-                            <option value="END">END</option>
-                            <option value="URO">Urology</option>
-                            <option value="GEN">General</option>
-                          </Select>
-                        </FormControl>
-
-                        <FormControl>
-                          <FormLabel>Select Language</FormLabel>
-                          <Select
-                            placeholder="Select Language"
-                            onChange={(e) =>
-                              handleLanguageChange(e.target.value)
-                            }
-                          >
-                            <option value="en-SG">English</option>
-                            <option value="zh-CN">Mandarin</option>
-                            <option value="id-ID">Malay</option>
-                            <option value="hi-IN">Tamil</option>
-                          </Select>
-                        </FormControl>
-                        <FormControl>
-                          <FormLabel>
-                            Code{" "}
-                            <Tooltip
-                              label="Use below code to retrieve transcript and summary later from https://notebuddy-nonprd02.azurewebsites.net/. Use same credentials to login the url."
-                              fontSize="sm"
-                              background={"white"}
-                              color={"black"}
-                            >
-                              <span>
-                                <Icon boxSize={5} ml={2} as={InfoOutlineIcon} />
-                              </span>
-                            </Tooltip>
+                          <FormLabel fontWeight={"normal"}>
+                            Enter code to retrieve data from previous session
+                            recording{" "}
                           </FormLabel>
                           <Input
-                            placeholder="00"
+                            placeholder="Code"
                             value={uCode}
-                            style={{
-                              width: "30%",
-                              color: "red",
-                              fontWeight: "bold",
-                              fontSize: "18px",
-                            }}
-                            disabled={true}
+                            onChange={(e: any) => setUCode(e.target.value)}
                           />
                         </FormControl>
-                      </Flex>
 
-                      <Spacer />
+                        <VStack></VStack>
+                      </ModalBody>
 
-                      <Flex alignItems={"end"} gap={"3"}>
-                        <Text
-                          fontSize={18}
-                          fontWeight="bold"
-                          color="gray"
-                          alignSelf={"center"}
-                          display="flex"
-                          gap={"1"}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            width="18"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-                            <g
-                              id="SVGRepo_tracerCarrier"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            ></g>
-                            <g id="SVGRepo_iconCarrier">
-                              <path
-                                d="M4.51555 7C3.55827 8.4301 3 10.1499 3 12C3 16.9706 7.02944 21 12 21C16.9706 21 21 16.9706 21 12C21 7.02944 16.9706 3 12 3V6M12 12L8 8"
-                                stroke="#717171"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              ></path>
-                            </g>
-                          </svg>
-                          {recording
-                            ? `${String(Math.floor(timer / 3600)).padStart(
-                                2,
-                                "0"
-                              )}:${String(
-                                Math.floor((timer % 3600) / 60)
-                              ).padStart(2, "0")}:${String(timer % 60).padStart(
-                                2,
-                                "0"
-                              )}`
-                            : "00:00:00"}
-                        </Text>
-
-                        <Button
-                          colorScheme={recording ? "red" : "orange"}
-                          variant={"outline"}
-                          onClick={toggleRecording}
-                          marginTop={0}
-                        >
-                          {recording ? "Stop Recording" : "Start Recording"}
+                      <ModalFooter gap={4}>
+                        <Button variant="ghost" onClick={onCloseVersionModal}>
+                          Cancel
                         </Button>
 
                         <Button
-                          colorScheme={"orange"}
-                          variant={"outline"}
-                          onClick={handleGenerate}
-                          marginTop={0}
+                          colorScheme="orange"
+                          mr={3}
+                          onClick={() => retrieveFromCosmosDB(uCode)}
                         >
-                          Save
+                          Submit
                         </Button>
-                      </Flex>
-                    </Flex>
-                  </CardBody>
-                </Card>
+                      </ModalFooter>
+                    </ModalContent>
+                  </Modal>
 
-                <Box
-                  w="full"
-                  p={4}
-                  display="flex"
-                  justifyContent="center"
-                  flexDirection="column"
-                  alignItems="center"
-                ></Box>
+                  <Drawer
+                    colorScheme={"orange"}
+                    placement={"bottom"}
+                    size={"md"}
+                    onClose={onCloseRatingDrawer}
+                    // closeOnOverlayClick={false}
+                    isOpen={isRatingOpen}
+                  >
+                    <DrawerOverlay />
+                    <DrawerContent>
+                      {/*<DrawerHeader borderBottomWidth='1px'>Basic Drawer</DrawerHeader>*/}
+                      <DrawerBody background={"#F9EEE6"}>
+                        <Box marginY={5}>
+                          {!feedbackSubmit ? (
+                            !rating ? (
+                              <Flex justifyContent={"space-evenly"}>
+                                <Flex gap={5} alignItems={"center"}>
+                                  <Text fontWeight={"bold"}>
+                                    How helpful was the summary and transcript?{" "}
+                                  </Text>
 
-                <HStack spacing={4} width="100%" alignItems="start">
-                  <Card width={"50%"} height={"600px"}>
-                    <CardBody>
-                      <HStack mb={6} mt={3}>
-                        <Flex gap={4}>
-                          <svg
-                            viewBox="0 0 24 24"
-                            width={18}
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-                            <g
-                              id="SVGRepo_tracerCarrier"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            ></g>
-                            <g id="SVGRepo_iconCarrier">
-                              <path
-                                d="M7 10L12 15L17 10"
-                                stroke="#000000"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              ></path>
-                            </g>
-                          </svg>
+                                  <Box>
+                                    {[...Array(5)].map((_, i) => {
+                                      const ratingValue = i + 1;
 
-                          <Menu>
-                            <MenuButton>{selectedTranscriptTab}</MenuButton>
-                            <MenuList>
-                              <MenuItem
-                                as="button"
-                                onClick={() =>
-                                  setSelectedTranscriptTab("Raw Transcript")
-                                }
-                              >
-                                Raw Transcript
-                              </MenuItem>
-                              <MenuItem
-                                as="button"
-                                onClick={() =>
-                                  setSelectedTranscriptTab(
-                                    "Formatted Transcript"
-                                  )
-                                }
-                              >
-                                Formatted Transcript
-                              </MenuItem>
-                            </MenuList>
-                          </Menu>
-                        </Flex>
-                      </HStack>
-
-                      {selectedTranscriptTab === "Raw Transcript" ? (
-                        transcription.map((t, index) => (
-                          <p
-                            key={index}
-                            style={{
-                              color: t.speakerId === "Guest-1" ? "blue" : "red",
-                            }}
-                          >
-                            {t.speakerId} : {t.text}
-                          </p>
-                        ))
-                      ) : isLoadingTranscript ? (
-                        <Spinner
-                          label="Formating transcript, please wait..."
-                          size="xl"
-                          color="#E54809"
-                        />
-                      ) : (
-                        formattedTranscript
-                          .split("\n")
-                          .filter((line) => line.trim() !== ":")
-                          .map((line, index) => {
-                            const [speaker, text] = line.split(": ");
-                            return (
-                              <p
-                                key={index}
-                                style={{
-                                  color: speaker === "Doctor" ? "blue" : "red",
-                                }}
-                              >
-                                {speaker} : {text}
-                              </p>
-                            );
-                          })
-                      )}
-                    </CardBody>
-                  </Card>
-
-                  <Card width={"50%"} height={"600px"}>
-                    <CardBody>
-                      <HStack mb={6} mt={3}>
-                        <Heading
-                          as="h3"
-                          color={"#E54809"}
-                          fontSize="lg"
-                          fontWeight="bold"
-                        >
-                          Summary
-                        </Heading>
-                        <Spacer />
-
-                        <Flex gap={4}>
-                          {!isEditing ? (
-                            <>
-                              <Button
-                                colorScheme="black"
-                                variant="link"
-                                _hover={{ color: "#DD6B20" }}
-                                onClick={regererateSummary}
-                              >
-                                <Flex gap={1}>
-                                  <svg
-                                    viewBox="0 0 16 16"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="#000000"
-                                    width={14}
-                                  >
-                                    <g
-                                      id="SVGRepo_bgCarrier"
-                                      strokeWidth="0"
-                                    ></g>
-                                    <g
-                                      id="SVGRepo_tracerCarrier"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    ></g>
-                                    <g id="SVGRepo_iconCarrier">
-                                      <path
-                                        fill="#000000"
-                                        d="M14.9547098,7.98576084 L15.0711,7.99552 C15.6179,8.07328 15.9981,8.57957 15.9204,9.12636 C15.6826,10.7983 14.9218,12.3522 13.747,13.5654 C12.5721,14.7785 11.0435,15.5888 9.37999,15.8801 C7.7165,16.1714 6.00349,15.9288 4.48631,15.187 C3.77335,14.8385 3.12082,14.3881 2.5472,13.8537 L1.70711,14.6938 C1.07714,15.3238 3.55271368e-15,14.8776 3.55271368e-15,13.9867 L3.55271368e-15,9.99998 L3.98673,9.99998 C4.87763,9.99998 5.3238,11.0771 4.69383,11.7071 L3.9626,12.4383 C4.38006,12.8181 4.85153,13.1394 5.36475,13.3903 C6.50264,13.9466 7.78739,14.1285 9.03501,13.9101 C10.2826,13.6916 11.4291,13.0839 12.3102,12.174 C13.1914,11.2641 13.762,10.0988 13.9403,8.84476 C14.0181,8.29798 14.5244,7.91776 15.0711,7.99552 L14.9547098,7.98576084 Z M11.5137,0.812976 C12.2279,1.16215 12.8814,1.61349 13.4558,2.14905 L14.2929,1.31193 C14.9229,0.681961 16,1.12813 16,2.01904 L16,6.00001 L12.019,6.00001 C11.1281,6.00001 10.6819,4.92287 11.3119,4.29291 L12.0404,3.56441 C11.6222,3.18346 11.1497,2.86125 10.6353,2.60973 C9.49736,2.05342 8.21261,1.87146 6.96499,2.08994 C5.71737,2.30841 4.57089,2.91611 3.68976,3.82599 C2.80862,4.73586 2.23802,5.90125 2.05969,7.15524 C1.98193,7.70202 1.47564,8.08224 0.928858,8.00448 C0.382075,7.92672 0.00185585,7.42043 0.0796146,6.87364 C0.31739,5.20166 1.07818,3.64782 2.25303,2.43465 C3.42788,1.22148 4.95652,0.411217 6.62001,0.119916 C8.2835,-0.171384 9.99651,0.0712178 11.5137,0.812976 Z"
-                                      ></path>
-                                    </g>
-                                  </svg>
-                                  Regenerate
+                                      return (
+                                        <label key={i}>
+                                          <input
+                                            type="radio"
+                                            name="rating"
+                                            value={ratingValue}
+                                            onClick={() =>
+                                              setRating(ratingValue)
+                                            }
+                                            style={{ display: "none" }}
+                                          />
+                                          <IconButton
+                                            icon={<StarIcon />}
+                                            color={
+                                              ratingValue <= (hover || rating!)
+                                                ? "#DD6B20"
+                                                : "gray.400"
+                                            }
+                                            onClick={() =>
+                                              setRating(ratingValue)
+                                            }
+                                            onMouseEnter={() =>
+                                              setHover(ratingValue)
+                                            }
+                                            onMouseLeave={() => setHover(null)}
+                                            aria-label={`Star ${ratingValue}`}
+                                            _focus={{ boxShadow: "none" }}
+                                            _hover={{ bg: "none" }}
+                                            _active={{ bg: "none" }}
+                                            border="none"
+                                            padding="0"
+                                            background="none"
+                                          />
+                                        </label>
+                                      );
+                                    })}
+                                  </Box>
                                 </Flex>
-                              </Button>
-
-                              <Button
-                                colorScheme="black"
-                                variant="link"
-                                _hover={{ color: "#DD6B20" }}
-                                onClick={handleCopy}
+                                <Box>
+                                  <IconButton
+                                    icon={<SmallCloseIcon />}
+                                    color={"gray.400"}
+                                    onClick={onCloseRatingDrawer}
+                                    _focus={{ boxShadow: "none" }}
+                                    _hover={{ bg: "none" }}
+                                    _active={{ bg: "none" }}
+                                    aria-label={`close`}
+                                    border="none"
+                                    padding="0"
+                                    background="none"
+                                  />
+                                </Box>
+                              </Flex>
+                            ) : (
+                              <Flex
+                                flexDirection={"column"}
+                                gap={2}
+                                marginX={300}
                               >
-                                <Flex gap={1}>
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    width={15}
-                                    xmlns="http://www.w3.org/2000/svg"
+                                <Text fontWeight={"bold"}>
+                                  Tell us what happened
+                                </Text>
+                                <Text>
+                                  Provide a brief explanation about your
+                                  experience with NoteBuddy
+                                </Text>
+                                <Textarea
+                                  placeholder="Enter your feedback here..."
+                                  value={feedback}
+                                  onChange={(e: any) =>
+                                    setFeedback(e.target.value)
+                                  }
+                                  size="sm"
+                                  resize="vertical"
+                                  borderRadius="md"
+                                  rows={5}
+                                  shadow={"md"}
+                                  p={2}
+                                />
+                                <Box alignSelf={"end"}>
+                                  <Button
+                                    colorScheme="orange"
+                                    onClick={() => setFeedbackSubmit(true)}
                                   >
-                                    <g
-                                      id="SVGRepo_bgCarrier"
-                                      strokeWidth="0"
-                                    ></g>
-                                    <g
-                                      id="SVGRepo_tracerCarrier"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    ></g>
-                                    <g id="SVGRepo_iconCarrier">
-                                      <path
-                                        fillRule="evenodd"
-                                        clipRule="evenodd"
-                                        d="M21 8C21 6.34315 19.6569 5 18 5H10C8.34315 5 7 6.34315 7 8V20C7 21.6569 8.34315 23 10 23H18C19.6569 23 21 21.6569 21 20V8ZM19 8C19 7.44772 18.5523 7 18 7H10C9.44772 7 9 7.44772 9 8V20C9 20.5523 9.44772 21 10 21H18C18.5523 21 19 20.5523 19 20V8Z"
-                                        fill="#0F0F0F"
-                                      ></path>
-                                      <path
-                                        d="M6 3H16C16.5523 3 17 2.55228 17 2C17 1.44772 16.5523 1 16 1H6C4.34315 1 3 2.34315 3 4V18C3 18.5523 3.44772 19 4 19C4.55228 19 5 18.5523 5 18V4C5 3.44772 5.44772 3 6 3Z"
-                                        fill="#0F0F0F"
-                                      ></path>
-                                    </g>
-                                  </svg>
-                                  Copy
-                                </Flex>
-                              </Button>
-
-                              <Button
-                                colorScheme="black"
-                                variant="link"
-                                _hover={{ color: "#DD6B20" }}
-                                onClick={handleEdit}
-                              >
-                                <Flex gap={1}>
-                                  <svg
-                                    fill="#000000"
-                                    viewBox="0 0 32 32"
-                                    version="1.1"
-                                    width="13"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                  >
-                                    <g
-                                      id="SVGRepo_bgCarrier"
-                                      strokeWidth="0"
-                                    ></g>
-                                    <g
-                                      id="SVGRepo_tracerCarrier"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    ></g>
-                                    <g id="SVGRepo_iconCarrier">
-                                      <path d="M30.133 1.552c-1.090-1.044-2.291-1.573-3.574-1.573-2.006 0-3.47 1.296-3.87 1.693-0.564 0.558-19.786 19.788-19.786 19.788-0.126 0.126-0.217 0.284-0.264 0.456-0.433 1.602-2.605 8.71-2.627 8.782-0.112 0.364-0.012 0.761 0.256 1.029 0.193 0.192 0.45 0.295 0.713 0.295 0.104 0 0.208-0.016 0.31-0.049 0.073-0.024 7.41-2.395 8.618-2.756 0.159-0.048 0.305-0.134 0.423-0.251 0.763-0.754 18.691-18.483 19.881-19.712 1.231-1.268 1.843-2.59 1.819-3.925-0.025-1.319-0.664-2.589-1.901-3.776zM22.37 4.87c0.509 0.123 1.711 0.527 2.938 1.765 1.24 1.251 1.575 2.681 1.638 3.007-3.932 3.912-12.983 12.867-16.551 16.396-0.329-0.767-0.862-1.692-1.719-2.555-1.046-1.054-2.111-1.649-2.932-1.984 3.531-3.532 12.753-12.757 16.625-16.628zM4.387 23.186c0.55 0.146 1.691 0.57 2.854 1.742 0.896 0.904 1.319 1.9 1.509 2.508-1.39 0.447-4.434 1.497-6.367 2.121 0.573-1.886 1.541-4.822 2.004-6.371zM28.763 7.824c-0.041 0.042-0.109 0.11-0.19 0.192-0.316-0.814-0.87-1.86-1.831-2.828-0.981-0.989-1.976-1.572-2.773-1.917 0.068-0.067 0.12-0.12 0.141-0.14 0.114-0.113 1.153-1.106 2.447-1.106 0.745 0 1.477 0.34 2.175 1.010 0.828 0.795 1.256 1.579 1.27 2.331 0.014 0.768-0.404 1.595-1.24 2.458z"></path>
-                                    </g>
-                                  </svg>
-                                  Edit
-                                </Flex>
-                              </Button>
-                            </>
+                                    Submit
+                                  </Button>
+                                </Box>
+                              </Flex>
+                            )
                           ) : (
-                            <>
-                              <Button
-                                colorScheme="black"
-                                variant="link"
-                                _hover={{ color: "#DD6B20" }}
-                                onClick={handleSave}
-                              >
-                                Save
-                              </Button>
-
-                              <Button
-                                colorScheme="black"
-                                variant="link"
-                                _hover={{ color: "#DD6B20" }}
-                                onClick={() => setIsEditing(false)}
-                              >
-                                Cancel
-                              </Button>
-                            </>
-                          )}
-                        </Flex>
-                      </HStack>
-
-                      {isLoadingSummary ? (
-                        <Spinner size="xl" color="#E54809" />
-                      ) : isEditing ? (
-                        <Textarea
-                          width="100%"
-                          height={"100%"}
-                          p={3}
-                          value={summary}
-                          onChange={(e: any) => setSummary(e.target.value)}
-                          overflow={"auto"}
-                        />
-                      ) : (
-                        <Box
-                          width="100%"
-                          height={475}
-                          p={3}
-                          borderRadius="md"
-                          overflow="auto"
-                          dangerouslySetInnerHTML={{
-                            //Define summary before calling split
-                            __html: summary
-                              ? summary
-                                  .split("\n")
-                                  .map((line) => `<p>${line}</br></p>`)
-                                  .join("")
-                              : "",
-                          }}
-                        />
-                      )}
-                    </CardBody>
-                  </Card>
-                </HStack>
-
-                <Modal
-                  isOpen={showPromptModal}
-                  size={"4xl"}
-                  onClose={onClosePromptModal}
-                >
-                  <ModalOverlay />
-                  <ModalContent>
-                    <ModalHeader>Prompt Setting</ModalHeader>
-                    <ModalCloseButton />
-                    <ModalBody>
-                      <Textarea
-                        mt={4}
-                        placeholder="Enter your prompt here..."
-                        value={prompt}
-                        onChange={(e: any) => setPrompt(e.target.value)}
-                        size="sm"
-                        resize="vertical"
-                        borderRadius="md"
-                        height={500}
-                        p={2}
-                      />
-
-                      <VStack></VStack>
-                    </ModalBody>
-
-                    <ModalFooter gap={4}>
-                      <Button variant="ghost" onClick={onClosePromptModal}>
-                        Cancel
-                      </Button>
-
-                      <Button
-                        colorScheme="orange"
-                        mr={3}
-                        onClick={onClosePromptModal}
-                      >
-                        Save
-                      </Button>
-                    </ModalFooter>
-                  </ModalContent>
-                </Modal>
-
-                <Modal
-                  isOpen={showVersionModal}
-                  size={"md"}
-                  onClose={onCloseVersionModal}
-                >
-                  <ModalOverlay />
-                  <ModalContent>
-                    <ModalHeader>Version History</ModalHeader>
-                    <ModalCloseButton />
-                    <ModalBody>
-                      <FormControl>
-                        <FormLabel fontWeight={"normal"}>
-                          Enter code to retrieve data from previous session
-                          recording{" "}
-                        </FormLabel>
-                        <Input
-                          placeholder="Code"
-                          value={uCode}
-                          onChange={(e: any) => setUCode(e.target.value)}
-                        />
-                      </FormControl>
-
-                      <VStack></VStack>
-                    </ModalBody>
-
-                    <ModalFooter gap={4}>
-                      <Button variant="ghost" onClick={onCloseVersionModal}>
-                        Cancel
-                      </Button>
-
-                      <Button
-                        colorScheme="orange"
-                        mr={3}
-                        onClick={() => retrieveFromCosmosDB(uniqueCode)}
-                      >
-                        Submit
-                      </Button>
-                    </ModalFooter>
-                  </ModalContent>
-                </Modal>
-
-                <Drawer
-                  colorScheme={"orange"}
-                  placement={"bottom"}
-                  size={"md"}
-                  onClose={onCloseRatingDrawer}
-                  // closeOnOverlayClick={false}
-                  isOpen={isRatingOpen}
-                >
-                  <DrawerOverlay />
-                  <DrawerContent>
-                    {/*<DrawerHeader borderBottomWidth='1px'>Basic Drawer</DrawerHeader>*/}
-                    <DrawerBody background={"#F9EEE6"}>
-                      <Box marginY={5}>
-                        {!feedbackSubmit ? (
-                          !rating ? (
                             <Flex justifyContent={"space-evenly"}>
                               <Flex gap={5} alignItems={"center"}>
                                 <Text fontWeight={"bold"}>
-                                  How helpful was the summary and transcript?{" "}
+                                  Thanks for your feedback! 🙌
                                 </Text>
-
-                                <Box>
-                                  {[...Array(5)].map((_, i) => {
-                                    const ratingValue = i + 1;
-
-                                    return (
-                                      <label key={i}>
-                                        <input
-                                          type="radio"
-                                          name="rating"
-                                          value={ratingValue}
-                                          onClick={() => setRating(ratingValue)}
-                                          style={{ display: "none" }}
-                                        />
-                                        <IconButton
-                                          icon={<StarIcon />}
-                                          color={
-                                            ratingValue <= (hover || rating!)
-                                              ? "#DD6B20"
-                                              : "gray.400"
-                                          }
-                                          onClick={() => setRating(ratingValue)}
-                                          onMouseEnter={() =>
-                                            setHover(ratingValue)
-                                          }
-                                          onMouseLeave={() => setHover(null)}
-                                          aria-label={`Star ${ratingValue}`}
-                                          _focus={{ boxShadow: "none" }}
-                                          _hover={{ bg: "none" }}
-                                          _active={{ bg: "none" }}
-                                          border="none"
-                                          padding="0"
-                                          background="none"
-                                        />
-                                      </label>
-                                    );
-                                  })}
-                                </Box>
                               </Flex>
                               <Box>
                                 <IconButton
@@ -1709,72 +1632,15 @@ const UserRecording: React.FC = () => {
                                 />
                               </Box>
                             </Flex>
-                          ) : (
-                            <Flex
-                              flexDirection={"column"}
-                              gap={2}
-                              marginX={300}
-                            >
-                              <Text fontWeight={"bold"}>
-                                Tell us what happened
-                              </Text>
-                              <Text>
-                                Provide a brief explanation about your
-                                experience with NoteBuddy
-                              </Text>
-                              <Textarea
-                                placeholder="Enter your feedback here..."
-                                value={feedback}
-                                onChange={(e: any) =>
-                                  setFeedback(e.target.value)
-                                }
-                                size="sm"
-                                resize="vertical"
-                                borderRadius="md"
-                                rows={5}
-                                shadow={"md"}
-                                p={2}
-                              />
-                              <Box alignSelf={"end"}>
-                                <Button
-                                  colorScheme="orange"
-                                  onClick={() => setFeedbackSubmit(true)}
-                                >
-                                  Submit
-                                </Button>
-                              </Box>
-                            </Flex>
-                          )
-                        ) : (
-                          <Flex justifyContent={"space-evenly"}>
-                            <Flex gap={5} alignItems={"center"}>
-                              <Text fontWeight={"bold"}>
-                                Thanks for your feedback! 🙌
-                              </Text>
-                            </Flex>
-                            <Box>
-                              <IconButton
-                                icon={<SmallCloseIcon />}
-                                color={"gray.400"}
-                                onClick={onCloseRatingDrawer}
-                                _focus={{ boxShadow: "none" }}
-                                _hover={{ bg: "none" }}
-                                _active={{ bg: "none" }}
-                                aria-label={`close`}
-                                border="none"
-                                padding="0"
-                                background="none"
-                              />
-                            </Box>
-                          </Flex>
-                        )}
-                      </Box>
-                    </DrawerBody>
-                  </DrawerContent>
-                </Drawer>
-              </Container>
-            </>
-          )}
+                          )}
+                        </Box>
+                      </DrawerBody>
+                    </DrawerContent>
+                  </Drawer>
+                </Container>
+              </>
+            )}
+          </Box>
         </>
       )}
     </>
