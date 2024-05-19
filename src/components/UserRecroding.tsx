@@ -189,6 +189,19 @@ const UserRecording: React.FC = () => {
     setUserConsent(!userConsent);
   };
 
+  React.useEffect(() => {
+    if (rawTranscriptRef.current) {
+      rawTranscriptRef.current.scrollTop =
+        rawTranscriptRef.current.scrollHeight;
+    }
+  }, [transcription]);
+
+  React.useEffect(() => {
+    if (summaryRef.current) {
+      summaryRef.current.scrollTop = summaryRef.current.scrollHeight;
+    }
+  }, [summary]);
+
   const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedSpeciality(event.target.value);
 
@@ -1275,6 +1288,7 @@ const UserRecording: React.FC = () => {
                             p={3}
                             borderRadius="md"
                             overflow="auto"
+                            ref={rawTranscriptRef}
                           >
                             {transcription.map((t, index) => (
                               <p
@@ -1485,6 +1499,7 @@ const UserRecording: React.FC = () => {
                             p={3}
                             borderRadius="md"
                             overflow="auto"
+                            ref={summaryRef}
                             dangerouslySetInnerHTML={{
                               //Define summary before calling split
                               __html: summary
