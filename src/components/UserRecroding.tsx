@@ -765,7 +765,11 @@ const UserRecording: React.FC = () => {
       const { resources } = await container.items.query(querySpec).fetchAll();
       if (resources && resources.length > 0) {
         setData(resources[0]);
-        setSummary(resources[0].summary);
+        setSummary(
+          resources[0].updatedSummary
+            ? resources[0].updatedSummary
+            : resources[0].summary
+        );
         setFormattedText(resources[0].transcript);
         setFormattedTranscript(resources[0].transcript);
       } else {
@@ -829,7 +833,9 @@ const UserRecording: React.FC = () => {
         isClosable: true,
       });
       setIsEditing(false); // Exit editing mode
-      setUpdatedSummary(summary); // Update local state
+      setUpdatedSummary(summary);
+      setSummary(summary);
+      // Update local state
       setIsSummaryUpdated(true);
       await retrieveFromCosmosDB(data.id);
     } catch (error) {
