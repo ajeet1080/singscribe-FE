@@ -791,10 +791,7 @@ const UserRecording: React.FC = () => {
   };
 
   const updateSummaryInCosmosDB = async () => {
-    // setData(null);
-    setIsSummaryUpdated(false);
-
-    if (!summary) {
+    if (!data || !summary) {
       toast({
         title: "Error",
         description: "No data or updated summary to save.",
@@ -830,8 +827,6 @@ const UserRecording: React.FC = () => {
       });
       setIsEditing(false); // Exit editing mode
       setUpdatedSummary(summary); // Update local state
-      setIsSummaryUpdated(true);
-      await retrieveFromCosmosDB(data.id);
     } catch (error) {
       toast({
         title: "Error",
