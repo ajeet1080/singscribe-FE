@@ -110,12 +110,13 @@ const UserRecording: React.FC = () => {
   const rawTranscriptRef = useRef<HTMLDivElement | null>(null);
   const summaryRef = useRef<HTMLDivElement | null>(null);
   const [summaryText, setSummaryText] = useState<string>("");
-  const [formattedText, setFormattedText] = useState<string>("");
+  const [formattedText, setFormattedText] = useState("");
   const [uCode, setUCode] = useState<string>("");
   const [userConsent, setUserConsent] = useState<boolean>(false);
   const [selectedSpeciality, setSelectedSpeciality] = useState<string>("");
   const [prompt, setPrompt] = useState<string>("");
   const [showPrompt, setShowPrompt] = useState(false);
+  const [isSummaryUpdated, setIsSummaryUpdated] = useState<boolean>(false);
 
   const [showPromptModal, setShowPromptModal] = useState(false);
 
@@ -141,6 +142,7 @@ const UserRecording: React.FC = () => {
   const [feedback, setFeedback] = useState<string>("");
 
   const [feedbackSubmit, setFeedbackSubmit] = useState<boolean>(false);
+  const [isRegenerated, setIsRegenerated] = useState<boolean>(false);
 
   const [showConsentModal, setShowConsentModal] = useState(false);
 
@@ -213,9 +215,9 @@ const UserRecording: React.FC = () => {
     setUCode("");
   };
 
-  const endpoint = "https://singscribe-cosmosdb.documents.azure.com:443/";
+  const endpoint = "https://notebuddy.documents.azure.com:443/";
   const key =
-    "SjcL1sPNRelpz9IyBzXL1Aww9smwQALhmPxGikKauJ8H0C1CzXQU3SZ09Scfyg85CxQcPrWNAmS8ACDb2jcm4Q==";
+    "cZtjlbZbWX82tiybof7QeyKRHJtWmBJqzH1P32CvpYCXqfXSS798hnzkEai9ME7aIf7uv0yMS8qfACDbFCLKHQ==";
   const databaseId = "notebuddy";
   const containerId = "summaries";
   const cosmosClient = new CosmosClient({ endpoint, key });
@@ -224,8 +226,8 @@ const UserRecording: React.FC = () => {
     try {
       // Initialize Cosmos DB client
       const cosmosDBClient = new CosmosClient({
-        endpoint: "https://singscribe-cosmosdb.documents.azure.com:443/",
-        key: "SjcL1sPNRelpz9IyBzXL1Aww9smwQALhmPxGikKauJ8H0C1CzXQU3SZ09Scfyg85CxQcPrWNAmS8ACDb2jcm4Q==",
+        endpoint: "https://notebuddy.documents.azure.com:443/",
+        key: "cZtjlbZbWX82tiybof7QeyKRHJtWmBJqzH1P32CvpYCXqfXSS798hnzkEai9ME7aIf7uv0yMS8qfACDbFCLKHQ==",
       });
 
       const databaseId = "notebuddy";
@@ -334,10 +336,10 @@ const UserRecording: React.FC = () => {
   };
 
   // Function to save transcript and summary to Cosmos DB
-  const saveToCosmosDB = async (summary: string, transcript: string) => {
+  async function saveToCosmosDB(summary: string, transcript: string) {
     const cosmosClient = new CosmosClient({
-      endpoint: "https://singscribe-cosmosdb.documents.azure.com:443/",
-      key: "SjcL1sPNRelpz9IyBzXL1Aww9smwQALhmPxGikKauJ8H0C1CzXQU3SZ09Scfyg85CxQcPrWNAmS8ACDb2jcm4Q==",
+      endpoint: "https://notebuddy.documents.azure.com:443/",
+      key: "cZtjlbZbWX82tiybof7QeyKRHJtWmBJqzH1P32CvpYCXqfXSS798hnzkEai9ME7aIf7uv0yMS8qfACDbFCLKHQ==",
     });
 
     const databaseId = "notebuddy";
@@ -348,6 +350,7 @@ const UserRecording: React.FC = () => {
       // For simplicity, we'll use a random number as an example
 
       setUCode(Math.random().toString(36).substr(2, 9));
+
       return uCode;
     };
     const { database } = await cosmosClient.databases.createIfNotExists({
@@ -377,11 +380,13 @@ const UserRecording: React.FC = () => {
       summary,
       transcript,
       updatedSummary: "",
+      rating: null,
+      feedback: "",
     });
 
     // Return the new id
     //return newId;
-  };
+  }
 
   const stopRecording = async () => {
     if (conversationTranscriber) {
@@ -392,10 +397,22 @@ const UserRecording: React.FC = () => {
     setIsLoading(true);
     setIsLoadingSummary(true);
     setIsLoadingTranscript(true);
+
     await transcribeAudio();
     setGenerateLoading(true);
-    handleGenerate();
   };
+
+  useEffect(() => {
+    if (isGenerateLoading) {
+      handleGenerate();
+    }
+  }, [isGenerateLoading]);
+
+  useEffect(() => {
+    if (isRegenerated) {
+      handleGenerate();
+    }
+  }, [isRegenerated]);
 
   const handleGenerate = async () => {
     try {
@@ -421,6 +438,7 @@ const UserRecording: React.FC = () => {
   };
 
   const regererateSummary = async () => {
+    setIsRegenerated(false);
     setSummary("");
     setIsLoadingSummary(true);
     setSummaryText("");
@@ -495,19 +513,19 @@ const UserRecording: React.FC = () => {
                     : delta.content
                 );
                 setIsLoadingSummary(false);
-                setIsRatingOpen(true);
               }
             }
           }
         }
       }
       setSummaryText(summary);
+      setIsRegenerated(true);
     } catch (error) {
       console.error("Error:", error);
     }
   };
 
-  const transcribeAudio = async () => {
+  async function transcribeAudio() {
     const transcript = transcription
       .map((t) => `${t.speakerId}: ${t.text}`)
       .join("\n");
@@ -658,18 +676,23 @@ const UserRecording: React.FC = () => {
       const result = await response.json();
       setFormattedTranscript(result.choices[0].message.content);
       setIsLoadingTranscript(false);
+      setFormattedText(result.choices[0].message.content);
     } catch (error) {
       console.error("Error:", error);
     }
-    setFormattedText(formattedTranscript);
-    setIsLoading(false);
-  };
+    console.log("transcript", formattedText);
+  }
 
   const handleCopy = async () => {
     try {
       // Remove HTML tags from the summary before copying
       const plainTextSummary = summary.replace(/<[^>]+>/g, "");
       await navigator.clipboard.writeText(plainTextSummary);
+      setFeedback("");
+      setRating(null);
+      setFeedbackSubmit(false);
+      setIsRatingOpen(true);
+
       toast({
         title: "Summary copied",
         description: "The summary has been copied to clipboard.",
@@ -768,7 +791,10 @@ const UserRecording: React.FC = () => {
   };
 
   const updateSummaryInCosmosDB = async () => {
-    if (!data || !summary) {
+    // setData(null);
+    setIsSummaryUpdated(true);
+
+    if (!summary) {
       toast({
         title: "Error",
         description: "No data or updated summary to save.",
@@ -787,6 +813,7 @@ const UserRecording: React.FC = () => {
       const { container } = await database.containers.createIfNotExists({
         id: containerId,
       });
+
       const item = {
         id: data.id,
         ...data,
@@ -803,6 +830,7 @@ const UserRecording: React.FC = () => {
       });
       setIsEditing(false); // Exit editing mode
       setUpdatedSummary(summary); // Update local state
+      setIsSummaryUpdated(false);
     } catch (error) {
       toast({
         title: "Error",
@@ -812,6 +840,57 @@ const UserRecording: React.FC = () => {
         isClosable: true,
       });
       console.error("Error updating summary in Cosmos DB", error);
+    }
+  };
+
+  // Save rating and feedback to Cosmos DB
+  const saveRatingAndFeedback = async () => {
+    if (!rating || !feedback) {
+      toast({
+        title: "Error",
+        description: "Please provide a rating and feedback.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      const { database } = await cosmosClient.databases.createIfNotExists({
+        id: databaseId,
+      });
+      const { container } = await database.containers.createIfNotExists({
+        id: containerId,
+      });
+      const item = {
+        id: data.id,
+        ...data,
+        rating: rating, // Update the summary field
+        feedback: feedback,
+      };
+      const { resource } = await container.item(data.id).replace(item);
+      setFeedbackSubmit(true);
+      setIsRatingOpen(false);
+
+      toast({
+        title: "Success",
+        description: "Rating and feedback saved successfully.",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+      setIsRatingOpen(false);
+      setFeedbackSubmit(true);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An error occurred while saving rating and feedback.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      console.error("Error saving rating and feedback in Cosmos DB", error);
     }
   };
 
@@ -1506,116 +1585,107 @@ const UserRecording: React.FC = () => {
                   >
                     <DrawerOverlay />
                     <DrawerContent>
-                      {/*<DrawerHeader borderBottomWidth='1px'>Basic Drawer</DrawerHeader>*/}
                       <DrawerBody background={"#F9EEE6"}>
                         <Box marginY={5}>
-                          {!feedbackSubmit ? (
-                            !rating ? (
-                              <Flex justifyContent={"space-evenly"}>
-                                <Flex gap={5} alignItems={"center"}>
-                                  <Text fontWeight={"bold"}>
-                                    How helpful was the summary and transcript?{" "}
-                                  </Text>
-
-                                  <Box>
-                                    {[...Array(5)].map((_, i) => {
-                                      const ratingValue = i + 1;
-
-                                      return (
-                                        <label key={i}>
-                                          <input
-                                            type="radio"
-                                            name="rating"
-                                            value={ratingValue}
-                                            onClick={() =>
-                                              setRating(ratingValue)
-                                            }
-                                            style={{ display: "none" }}
-                                          />
-                                          <IconButton
-                                            icon={<StarIcon />}
-                                            color={
-                                              ratingValue <= (hover || rating!)
-                                                ? "#DD6B20"
-                                                : "gray.400"
-                                            }
-                                            onClick={() =>
-                                              setRating(ratingValue)
-                                            }
-                                            onMouseEnter={() =>
-                                              setHover(ratingValue)
-                                            }
-                                            onMouseLeave={() => setHover(null)}
-                                            aria-label={`Star ${ratingValue}`}
-                                            _focus={{ boxShadow: "none" }}
-                                            _hover={{ bg: "none" }}
-                                            _active={{ bg: "none" }}
-                                            border="none"
-                                            padding="0"
-                                            background="none"
-                                          />
-                                        </label>
-                                      );
-                                    })}
-                                  </Box>
-                                </Flex>
-                                <Box>
-                                  <IconButton
-                                    icon={<SmallCloseIcon />}
-                                    color={"gray.400"}
-                                    onClick={onCloseRatingDrawer}
-                                    _focus={{ boxShadow: "none" }}
-                                    _hover={{ bg: "none" }}
-                                    _active={{ bg: "none" }}
-                                    aria-label={`close`}
-                                    border="none"
-                                    padding="0"
-                                    background="none"
-                                  />
-                                </Box>
-                              </Flex>
-                            ) : (
-                              <Flex
-                                flexDirection={"column"}
-                                gap={2}
-                                marginX={300}
-                              >
-                                <Text fontWeight={"bold"}>
-                                  Tell us what happened
-                                </Text>
-                                <Text>
-                                  Provide a brief explanation about your
-                                  experience with NoteBuddy
-                                </Text>
-                                <Textarea
-                                  placeholder="Enter your feedback here..."
-                                  value={feedback}
-                                  onChange={(e: any) =>
-                                    setFeedback(e.target.value)
-                                  }
-                                  size="sm"
-                                  resize="vertical"
-                                  borderRadius="md"
-                                  rows={5}
-                                  shadow={"md"}
-                                  p={2}
-                                />
-                                <Box alignSelf={"end"}>
-                                  <Button
-                                    colorScheme="orange"
-                                    onClick={() => setFeedbackSubmit(true)}
-                                  >
-                                    Submit
-                                  </Button>
-                                </Box>
-                              </Flex>
-                            )
-                          ) : (
+                          {feedbackSubmit ? (
                             <Flex justifyContent={"space-evenly"}>
                               <Flex gap={5} alignItems={"center"}>
                                 <Text fontWeight={"bold"}>
                                   Thanks for your feedback! 🙌
                                 </Text>
+                              </Flex>
+                              <Box>
+                                <IconButton
+                                  icon={<SmallCloseIcon />}
+                                  color={"gray.400"}
+                                  onClick={onCloseRatingDrawer}
+                                  _focus={{ boxShadow: "none" }}
+                                  _hover={{ bg: "none" }}
+                                  _active={{ bg: "none" }}
+                                  aria-label={`close`}
+                                  border="none"
+                                  padding="0"
+                                  background="none"
+                                />
+                              </Box>
+                            </Flex>
+                          ) : rating ? (
+                            <Flex
+                              flexDirection={"column"}
+                              gap={2}
+                              marginX={300}
+                            >
+                              <Text fontWeight={"bold"}>
+                                Tell us what happened
+                              </Text>
+                              <Text>
+                                Provide a brief explanation about your
+                                experience with NoteBuddy
+                              </Text>
+                              <Textarea
+                                placeholder="Enter your feedback here..."
+                                value={feedback}
+                                onChange={(e: any) =>
+                                  setFeedback(e.target.value)
+                                }
+                                size="sm"
+                                resize="vertical"
+                                borderRadius="md"
+                                rows={5}
+                                shadow={"md"}
+                                p={2}
+                              />
+                              <Box alignSelf={"end"}>
+                                <Button
+                                  colorScheme="orange"
+                                  onClick={() => saveRatingAndFeedback()}
+                                >
+                                  Submit
+                                </Button>
+                              </Box>
+                            </Flex>
+                          ) : (
+                            <Flex justifyContent={"space-evenly"}>
+                              <Flex gap={5} alignItems={"center"}>
+                                <Text fontWeight={"bold"}>
+                                  How helpful was the summary and transcript?{" "}
+                                </Text>
+                                <Box>
+                                  {[...Array(5)].map((_, i) => {
+                                    const ratingValue = i + 1;
+                                    return (
+                                      <label key={i}>
+                                        <input
+                                          type="radio"
+                                          name="rating"
+                                          value={ratingValue}
+                                          onClick={() => setRating(ratingValue)}
+                                          style={{ display: "none" }}
+                                        />
+                                        <IconButton
+                                          icon={<StarIcon />}
+                                          color={
+                                            ratingValue <= (hover || rating!)
+                                              ? "#DD6B20"
+                                              : "gray.400"
+                                          }
+                                          onClick={() => setRating(ratingValue)}
+                                          onMouseEnter={() =>
+                                            setHover(ratingValue)
+                                          }
+                                          onMouseLeave={() => setHover(null)}
+                                          aria-label={`Star ${ratingValue}`}
+                                          _focus={{ boxShadow: "none" }}
+                                          _hover={{ bg: "none" }}
+                                          _active={{ bg: "none" }}
+                                          border="none"
+                                          padding="0"
+                                          background="none"
+                                        />
+                                      </label>
+                                    );
+                                  })}
+                                </Box>
                               </Flex>
                               <Box>
                                 <IconButton
