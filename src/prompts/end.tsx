@@ -5,8 +5,8 @@ Your task is to transform this transcript into a formatted clinical documentatio
 Format the clinical documentation as follows:
 
 Medical History: Provide a summary of the patient's past medical conditions.
-Consultation with Patient: Note the current month and year at the top. Include details on patient well-being & symptoms, lab results and changes, medication adherence, changes & side-effects (e.g. nausea), counselling, and episodes of hypoglycemia (e.g. no hypoglycemia).
-Plan: Outline the proposed treatment plan. Keep he plan in bulleted formatted as shown in Examples below.
+Consultation with Patient: Include details on patient well-being & symptoms, lab results and changes, medication adherence, changes & side-effects (e.g. nausea), counselling, and episodes of hypoglycemia (e.g. no hypoglycemia).Keep the Consultation with Patient in bulleted formatted as shown in Examples below.
+Plan: Outline the proposed treatment plan. Keep the plan in bulleted formatted as shown in Examples below.
 
 Example 1:
 
@@ -19,10 +19,11 @@ Medical History:
 6) DM f/u private GP JAN 2024 Referred from CVM for DM management  Labs 
 
 Consultation with Patient:
-MAY 2024 
-K 4.8 Cr 107 eGFR 63 A1c 8.5% from 8.0% 
-Current DM meds: sitagliptin 50mg OM empagliflozin 25mg OM gliclazide MR 60mg BD  levemir 10U bedtime - last 3 months  metformin XR 1g OM 
-came with wife checks BG but does not know readings says single digit no hypos c/o frequent urination still can cope with it but finds it irksome on frusemide and empa discussed continuing empa for glycemic, cardiorenal benefits may not give him that much relief if stopped, as remains on frusemide which overall has a greater diuretic effect and would lose out on the many benefits of empa
+
+- K 4.8 Cr 107 eGFR 63 A1c 8.5% from 8.0% 
+- Current DM meds: sitagliptin 50mg OM empagliflozin 25mg OM gliclazide MR 60mg BD  levemir 10U bedtime 
+- last 3 months  metformin XR 1g OM 
+- came with wife checks BG but does not know readings says single digit no hypos c/o frequent urination still can cope with it but finds it irksome on frusemide and empa discussed continuing empa for glycemic, cardiorenal benefits may not give him that much relief if stopped, as remains on frusemide which overall has a greater diuretic effect and would lose out on the many benefits of empa
 
 Plan:
 - increase sitagliptin 100mg OM  
@@ -40,9 +41,12 @@ Medical History:
 5) Hypocalcemia - likely hypoparathyroidism following thyroid surgery 
 
 Consultation with Patient:
-Aug 2023 
-S/B OPS June 2023 fundal photo done: normal  foot screen done: normal 
-FT4 10.7 TSH 2.28 normal Na 139 K 4.3 Cr 82 Glu 15.1 Corr Ca 2.05  A1c 8.0% from 7.2% takes home BP: usually 130+ but sometimes up to 150-160+ when anxious morning BG 7.5-8.5 not willing to increase meds for DM and BP wants to keep everything status quo allowed to ventilate - has trouble sleeping, extremely lonely, nobody to talk to, feels like everything in the media is geared towards younger people and that she has been left behind
+- TSH 1.5 FT4 15.5
+- S/B OPS June 2023 fundal photo done: normal  
+- foot screen done: normal 
+- FT4 10.7 TSH 2.28 normal Na 139 K 4.3 Cr 82 Glu 15.1 Corr Ca 2.05  
+- A1c 8.0% from 7.2% takes home BP: usually 130+ but sometimes up to 150-160+ when anxious morning BG 7.5-8.5 not willing to increase meds for DM and BP wants to keep everything status quo allowed to ventilate
+- has trouble sleeping, extremely lonely, nobody to talk to, feels like everything in the media is geared towards younger people and that she has been left behind
 
 Plan:
 - stop mecobalamin 
