@@ -71,6 +71,7 @@ import { CosmosClient } from "@azure/cosmos";
 import prompt_general from "../prompts/general";
 import prompt_end from "../prompts/end";
 import prompt_uro from "../prompts/uro";
+import prompt_imed from "../prompts/imed";
 import clear_all from "../assets/clear_all.jpg";
 import logo from "../assets/singhealth_logo_clear.png";
 import { SmallCloseIcon, StarIcon, InfoOutlineIcon } from "@chakra-ui/icons";
@@ -212,6 +213,8 @@ const UserRecording: React.FC = () => {
       newPrompt = prompt_uro;
     } else if (event.target.value === "GEN") {
       newPrompt = prompt_general;
+    } else if (event.target.value === "IMED") {
+      newPrompt = prompt_imed;
     } else {
       newPrompt = "No prompt selected.";
     }
@@ -1110,6 +1113,7 @@ const UserRecording: React.FC = () => {
                             >
                               <option value="END">END</option>
                               <option value="URO">Urology</option>
+                              <option value="IMED">Int Medicine</option>
                               <option value="GEN">General</option>
                             </Select>
                           </FormControl>
